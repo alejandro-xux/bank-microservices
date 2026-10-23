@@ -2,13 +2,15 @@ package com.alejandro.bank.customers.service;
 
 import com.alejandro.bank.customers.domain.Customer;
 import com.alejandro.bank.customers.domain.CustomerStatus;
+import com.alejandro.bank.customers.domain.DocumentType;
 import com.alejandro.bank.customers.exception.CustomerAlreadyExistsException;
+import com.alejandro.bank.customers.exception.CustomerNotFoundException;
 import com.alejandro.bank.customers.repository.CustomerRepository;
 import com.azure.spring.data.cosmos.exception.CosmosAccessException;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
+import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
-import com.alejandro.bank.customers.exception.CustomerNotFoundException;
 
 import java.text.Normalizer;
 import java.time.Instant;
@@ -43,6 +45,16 @@ public class CustomerService {
     public Mono<Customer> findById(String id) {
         return customerRepository.findById(id)
                 .switchIfEmpty(Mono.error(new CustomerNotFoundException(id)));
+    }
+
+    public Mono<Customer> findByDni(String dni) {
+        return customerRepository.findByDocumentKey(DocumentType.DNI + "#" + dni)
+                .next()
+                .switchIfEmpty(Mono.error(new CustomerNotFoundException()));
+    }
+
+    public Flux<Customer> searchByName(String name, int page, int size) {
+        return customerRepository.searchByName(normalize(name), page * size, size);
     }
 
     // "Ana María", "Quispe", "Rojas" -> "ana maria quispe rojas"

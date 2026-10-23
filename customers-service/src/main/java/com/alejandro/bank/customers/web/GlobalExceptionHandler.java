@@ -8,6 +8,7 @@ import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.bind.support.WebExchangeBindException;
 import org.springframework.web.server.ServerWebInputException;
+import org.springframework.web.method.annotation.HandlerMethodValidationException;
 
 import java.util.List;
 import java.util.Map;
@@ -53,6 +54,23 @@ public class GlobalExceptionHandler {
     public ProblemDetail handleConflict(CustomerAlreadyExistsException ex) {
         ProblemDetail problem = ProblemDetail.forStatusAndDetail(HttpStatus.CONFLICT, ex.getMessage());
         problem.setTitle("Conflicto");
+        return problem;
+    }
+
+    // 400: un @RequestParam no cumple sus reglas (@Pattern, @Min, @Max...)
+    @ExceptionHandler(HandlerMethodValidationException.class)
+    public ProblemDetail handleParameterValidation(HandlerMethodValidationException ex) {
+        ProblemDetail problem = ProblemDetail.forStatusAndDetail(
+                HttpStatus.BAD_REQUEST, "La solicitud tiene parámetros inválidos");
+        problem.setTitle("Datos inválidos");
+
+        List<Map<String, String>> errors = ex.getParameterValidationResults().stream()
+                .flatMap(result -> result.getResolvableErrors().stream()
+                        .map(error -> Map.of(
+                                "field", String.valueOf(result.getMethodParameter().getParameterName()),
+                                "message", String.valueOf(error.getDefaultMessage()))))
+                .toList();
+        problem.setProperty("errors", errors);
         return problem;
     }
 }

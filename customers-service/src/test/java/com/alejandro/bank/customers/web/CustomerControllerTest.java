@@ -10,6 +10,7 @@ import org.springframework.boot.webflux.test.autoconfigure.WebFluxTest;
 import org.springframework.http.MediaType;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.reactive.server.WebTestClient;
+import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 import com.alejandro.bank.customers.exception.CustomerNotFoundException;
 import com.alejandro.bank.customers.domain.DocumentType;
@@ -17,6 +18,7 @@ import com.alejandro.bank.customers.domain.DocumentType;
 import java.time.Instant;
 
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -137,5 +139,85 @@ class CustomerControllerTest {
                 .expectHeader().contentType(MediaType.APPLICATION_PROBLEM_JSON)
                 .expectBody()
                 .jsonPath("$.detail").isEqualTo("No existe un cliente con id no-existe");
+    }
+    @Test
+    void findByDniReturns200() {
+        when(customerService.findByDni("12345678")).thenReturn(Mono.just(ana()));
+
+        webTestClient.get().uri("/customers?dni=12345678")
+                .exchange()
+                .expectStatus().isOk()
+                .expectBody()
+                .jsonPath("$.id").isEqualTo("abc-123")
+                .jsonPath("$.documentNumber").isEqualTo("12345678");
+    }
+
+    @Test
+    void findByDniWithUnknownDniReturns404() {
+        when(customerService.findByDni("87654321")).thenReturn(Mono.error(new CustomerNotFoundException()));
+
+        webTestClient.get().uri("/customers?dni=87654321")
+                .exchange()
+                .expectStatus().isNotFound()
+                .expectHeader().contentType(MediaType.APPLICATION_PROBLEM_JSON)
+                .expectBody()
+                .jsonPath("$.detail").isEqualTo("No existe un cliente con ese documento");
+    }
+
+    @Test
+    void findByDniWithInvalidFormatReturns400() {
+        webTestClient.get().uri("/customers?dni=123")
+                .exchange()
+                .expectStatus().isBadRequest()
+                .expectHeader().contentType(MediaType.APPLICATION_PROBLEM_JSON)
+                .expectBody()
+                .jsonPath("$.errors[0].field").isEqualTo("dni")
+                .jsonPath("$.errors[0].message").isEqualTo("debe tener 8 dígitos");
+
+        verify(customerService, never()).findByDni(any());
+    }
+
+    @Test
+    void searchByNameReturnsList() {
+        when(customerService.searchByName("quispe", 0, 20)).thenReturn(Flux.just(ana()));
+
+        webTestClient.get().uri("/customers/search?name=quispe")
+                .exchange()
+                .expectStatus().isOk()
+                .expectBody()
+                .jsonPath("$.length()").isEqualTo(1)
+                .jsonPath("$[0].firstName").isEqualTo("Ana María");
+    }
+    @Test
+    void searchByNameWithoutMatchesReturnsEmptyList() {
+        when(customerService.searchByName("zzz", 0, 20)).thenReturn(Flux.empty());
+
+        webTestClient.get().uri("/customers/search?name=zzz")
+                .exchange()
+                .expectStatus().isOk()
+                .expectBody()
+                .jsonPath("$.length()").isEqualTo(0);
+    }
+
+    @Test
+    void searchByNameWithSizeOver20Returns400() {
+        webTestClient.get().uri("/customers/search?name=quispe&size=50")
+                .exchange()
+                .expectStatus().isBadRequest()
+                .expectBody()
+                .jsonPath("$.errors[0].field").isEqualTo("size")
+                .jsonPath("$.errors[0].message").isEqualTo("no puede ser mayor que 20");
+
+        verify(customerService, never()).searchByName(any(), anyInt(), anyInt());
+    }
+
+    private Customer ana() {
+        return Customer.builder()
+                .id("abc-123")
+                .documentType(DocumentType.DNI)
+                .documentNumber("12345678")
+                .firstName("Ana María")
+                .status(CustomerStatus.ACTIVE)
+                .build();
     }
 }
