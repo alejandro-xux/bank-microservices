@@ -2,6 +2,7 @@ package com.alejandro.bank.customers.web;
 
 import com.alejandro.bank.customers.domain.Customer;
 import com.alejandro.bank.customers.domain.CustomerStatus;
+import com.alejandro.bank.customers.domain.Email;
 import com.alejandro.bank.customers.exception.CustomerAlreadyExistsException;
 import com.alejandro.bank.customers.service.CustomerService;
 import org.junit.jupiter.api.Test;
@@ -16,9 +17,9 @@ import com.alejandro.bank.customers.exception.CustomerNotFoundException;
 import com.alejandro.bank.customers.domain.DocumentType;
 
 import java.time.Instant;
+import java.util.List;
 
-import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.anyInt;
+import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -219,5 +220,62 @@ class CustomerControllerTest {
                 .firstName("Ana María")
                 .status(CustomerStatus.ACTIVE)
                 .build();
+    }
+
+    @Test
+    void updateContactReturns200AndIgnoresOtherFields() {
+        Customer updated = ana();
+        updated.setEmails(List.of(new Email("nuevo@mail.com", Email.Type.PERSONAL, true, false)));
+        updated.setUpdatedAt(Instant.parse("2026-10-23T12:00:00Z"));
+        when(customerService.updateContact("abc-123", "nuevo@mail.com", null)).thenReturn(Mono.just(updated));
+
+        webTestClient.patch().uri("/customers/abc-123")
+                .contentType(MediaType.APPLICATION_JSON)
+                .bodyValue("{\"email\":\"nuevo@mail.com\",\"firstName\":\"Hacker\"}")
+                .exchange()
+                .expectStatus().isOk()
+                .expectBody()
+                .jsonPath("$.emails[0].address").isEqualTo("nuevo@mail.com")
+                .jsonPath("$.firstName").isEqualTo("Ana María")
+                .jsonPath("$.updatedAt").isEqualTo("2026-10-23T12:00:00Z");
+
+        verify(customerService).updateContact(eq("abc-123"), eq("nuevo@mail.com"), isNull());
+    }
+
+    @Test
+    void updateContactWithEmptyBodyReturns400() {
+        webTestClient.patch().uri("/customers/abc-123")
+                .contentType(MediaType.APPLICATION_JSON)
+                .bodyValue("{}")
+                .exchange()
+                .expectStatus().isBadRequest()
+                .expectBody()
+                .jsonPath("$.errors[0].message").isEqualTo("debe enviar email o teléfono");
+    }
+
+    @Test
+    void updateContactWithInvalidEmailReturns400() {
+        webTestClient.patch().uri("/customers/abc-123")
+                .contentType(MediaType.APPLICATION_JSON)
+                .bodyValue("{\"email\":\"no-es-email\"}")
+                .exchange()
+                .expectStatus().isBadRequest()
+                .expectBody()
+                .jsonPath("$.errors[0].field").isEqualTo("email")
+                .jsonPath("$.errors[0].message").isEqualTo("debe ser un email válido");
+
+        verify(customerService, never()).updateContact(any(), any(), any());
+    }
+
+    @Test
+    void updateContactWithUnknownIdReturns404() {
+        when(customerService.updateContact("no-existe", "nuevo@mail.com", null))
+                .thenReturn(Mono.error(new CustomerNotFoundException("no-existe")));
+
+        webTestClient.patch().uri("/customers/no-existe")
+                .contentType(MediaType.APPLICATION_JSON)
+                .bodyValue("{\"email\":\"nuevo@mail.com\"}")
+                .exchange()
+                .expectStatus().isNotFound();
     }
 }
