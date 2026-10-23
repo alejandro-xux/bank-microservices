@@ -74,7 +74,8 @@ public class CustomerService {
                         customer.setPhones(replacePrimaryPhone(customer.getPhones(), phone));
                     }
                     customer.setUpdatedAt(Instant.now());
-                    return customerRepository.save(customer);
+                    return customerRepository.save(customer)
+                            .flatMap(saved -> customerCache.evict(id).thenReturn(saved));
                 });
     }
 
