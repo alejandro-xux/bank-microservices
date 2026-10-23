@@ -13,7 +13,9 @@ import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.reactive.server.WebTestClient;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
+import com.alejandro.bank.customers.exception.CustomerModifiedException;
 import com.alejandro.bank.customers.exception.CustomerNotFoundException;
+import com.alejandro.bank.customers.exception.CustomerPreconditionFailedException;
 import com.alejandro.bank.customers.domain.DocumentType;
 
 import java.time.Instant;
@@ -212,6 +214,63 @@ class CustomerControllerTest {
         verify(customerService, never()).searchByName(any(), anyInt(), anyInt());
     }
 
+    @Test
+    void findByIdReturnsETagHeader() {
+        Customer customer = ana();
+        customer.setEtag("\"v1\"");
+        when(customerService.findById("abc-123")).thenReturn(Mono.just(customer));
+
+        webTestClient.get().uri("/customers/abc-123")
+                .exchange()
+                .expectStatus().isOk()
+                .expectHeader().valueEquals("ETag", "\"v1\"");
+    }
+
+    @Test
+    void updateContactPassesIfMatchAndReturnsNewETag() {
+        Customer updated = ana();
+        updated.setEtag("\"v2\"");
+        when(customerService.updateContact("abc-123", "nuevo@mail.com", null, "\"v1\"")).thenReturn(Mono.just(updated));
+
+        webTestClient.patch().uri("/customers/abc-123")
+                .header("If-Match", "\"v1\"")
+                .contentType(MediaType.APPLICATION_JSON)
+                .bodyValue("{\"email\":\"nuevo@mail.com\"}")
+                .exchange()
+                .expectStatus().isOk()
+                .expectHeader().valueEquals("ETag", "\"v2\"");
+    }
+
+    @Test
+    void updateContactWithStaleIfMatchReturns412() {
+        when(customerService.updateContact("abc-123", "nuevo@mail.com", null, "\"v0\""))
+                .thenReturn(Mono.error(new CustomerPreconditionFailedException()));
+
+        webTestClient.patch().uri("/customers/abc-123")
+                .header("If-Match", "\"v0\"")
+                .contentType(MediaType.APPLICATION_JSON)
+                .bodyValue("{\"email\":\"nuevo@mail.com\"}")
+                .exchange()
+                .expectStatus().isEqualTo(412)
+                .expectHeader().contentType(MediaType.APPLICATION_PROBLEM_JSON)
+                .expectBody()
+                .jsonPath("$.title").isEqualTo("Versión desactualizada");
+    }
+
+    @Test
+    void updateContactModifiedConcurrentlyReturns409() {
+        when(customerService.updateContact("abc-123", "nuevo@mail.com", null, null))
+                .thenReturn(Mono.error(new CustomerModifiedException()));
+
+        webTestClient.patch().uri("/customers/abc-123")
+                .contentType(MediaType.APPLICATION_JSON)
+                .bodyValue("{\"email\":\"nuevo@mail.com\"}")
+                .exchange()
+                .expectStatus().isEqualTo(409)
+                .expectBody()
+                .jsonPath("$.title").isEqualTo("Conflicto de concurrencia");
+    }
+
     private Customer ana() {
         return Customer.builder()
                 .id("abc-123")
@@ -227,7 +286,7 @@ class CustomerControllerTest {
         Customer updated = ana();
         updated.setEmails(List.of(new Email("nuevo@mail.com", Email.Type.PERSONAL, true, false)));
         updated.setUpdatedAt(Instant.parse("2026-10-23T12:00:00Z"));
-        when(customerService.updateContact("abc-123", "nuevo@mail.com", null)).thenReturn(Mono.just(updated));
+        when(customerService.updateContact("abc-123", "nuevo@mail.com", null, null)).thenReturn(Mono.just(updated));
 
         webTestClient.patch().uri("/customers/abc-123")
                 .contentType(MediaType.APPLICATION_JSON)
@@ -239,7 +298,7 @@ class CustomerControllerTest {
                 .jsonPath("$.firstName").isEqualTo("Ana María")
                 .jsonPath("$.updatedAt").isEqualTo("2026-10-23T12:00:00Z");
 
-        verify(customerService).updateContact(eq("abc-123"), eq("nuevo@mail.com"), isNull());
+        verify(customerService).updateContact(eq("abc-123"), eq("nuevo@mail.com"), isNull(), isNull());
     }
 
     @Test
@@ -264,12 +323,12 @@ class CustomerControllerTest {
                 .jsonPath("$.errors[0].field").isEqualTo("email")
                 .jsonPath("$.errors[0].message").isEqualTo("debe ser un email válido");
 
-        verify(customerService, never()).updateContact(any(), any(), any());
+        verify(customerService, never()).updateContact(any(), any(), any(), any());
     }
 
     @Test
     void updateContactWithUnknownIdReturns404() {
-        when(customerService.updateContact("no-existe", "nuevo@mail.com", null))
+        when(customerService.updateContact("no-existe", "nuevo@mail.com", null, null))
                 .thenReturn(Mono.error(new CustomerNotFoundException("no-existe")));
 
         webTestClient.patch().uri("/customers/no-existe")

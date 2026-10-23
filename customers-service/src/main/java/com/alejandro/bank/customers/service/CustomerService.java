@@ -7,7 +7,9 @@ import com.alejandro.bank.customers.domain.DocumentType;
 import com.alejandro.bank.customers.domain.Email;
 import com.alejandro.bank.customers.domain.Phone;
 import com.alejandro.bank.customers.exception.CustomerAlreadyExistsException;
+import com.alejandro.bank.customers.exception.CustomerModifiedException;
 import com.alejandro.bank.customers.exception.CustomerNotFoundException;
+import com.alejandro.bank.customers.exception.CustomerPreconditionFailedException;
 import com.alejandro.bank.customers.repository.CustomerRepository;
 import com.azure.spring.data.cosmos.exception.CosmosAccessException;
 import lombok.RequiredArgsConstructor;
@@ -29,6 +31,7 @@ import java.util.stream.Collectors;
 public class CustomerService {
 
     private static final int HTTP_CONFLICT = 409;
+    private static final int HTTP_PRECONDITION_FAILED = 412;
 
     private final CustomerRepository customerRepository;
     private final CustomerCache customerCache;
@@ -44,7 +47,7 @@ public class CustomerService {
         customer.setUpdatedAt(now);
 
         return customerRepository.save(customer)
-                .onErrorMap(CustomerService::isConflict, ex -> new CustomerAlreadyExistsException());
+                .onErrorMap(ex -> hasCosmosStatus(ex, HTTP_CONFLICT), ex -> new CustomerAlreadyExistsException());
     }
 
     // Cache Aside: primero Redis; si no está (o Redis falla), Cosmos y se guarda en Redis
@@ -64,9 +67,14 @@ public class CustomerService {
         return customerRepository.searchByName(normalize(name), page * size, size);
     }
 
-    public Mono<Customer> updateContact(String id, String email, String phone) {
+    // ifMatch (opcional): versión que el cliente leyó; si ya cambió → 412.
+    // Si otro cambio se cuela entre la lectura y el guardado, Cosmos responde 412 (por @Version) → 409.
+    public Mono<Customer> updateContact(String id, String email, String phone, String ifMatch) {
         return findInDatabase(id)
                 .flatMap(customer -> {
+                    if (ifMatch != null && !ifMatch.equals("*") && !ifMatch.equals(customer.getEtag())) {
+                        return Mono.error(new CustomerPreconditionFailedException());
+                    }
                     if (email != null) {
                         customer.setEmails(replacePrimaryEmail(customer.getEmails(), email));
                     }
@@ -75,6 +83,8 @@ public class CustomerService {
                     }
                     customer.setUpdatedAt(Instant.now());
                     return customerRepository.save(customer)
+                            .onErrorMap(ex -> hasCosmosStatus(ex, HTTP_PRECONDITION_FAILED),
+                                    ex -> new CustomerModifiedException())
                             .flatMap(saved -> customerCache.evict(id).thenReturn(saved));
                 });
     }
@@ -95,10 +105,10 @@ public class CustomerService {
         return withoutAccents.toLowerCase(Locale.ROOT).trim().replaceAll("\\s+", " ");
     }
 
-    private static boolean isConflict(Throwable ex) {
+    private static boolean hasCosmosStatus(Throwable ex, int statusCode) {
         return ex instanceof CosmosAccessException cosmosEx
                 && cosmosEx.getCosmosException() != null
-                && cosmosEx.getCosmosException().getStatusCode() == HTTP_CONFLICT;
+                && cosmosEx.getCosmosException().getStatusCode() == statusCode;
     }
 
 

@@ -3,7 +3,9 @@ package com.alejandro.bank.customers.service;
 import com.alejandro.bank.customers.cache.CustomerCache;
 import com.alejandro.bank.customers.domain.*;
 import com.alejandro.bank.customers.exception.CustomerAlreadyExistsException;
+import com.alejandro.bank.customers.exception.CustomerModifiedException;
 import com.alejandro.bank.customers.exception.CustomerNotFoundException;
+import com.alejandro.bank.customers.exception.CustomerPreconditionFailedException;
 import com.alejandro.bank.customers.repository.CustomerRepository;
 import com.azure.cosmos.CosmosException;
 import com.azure.spring.data.cosmos.exception.CosmosAccessException;
@@ -53,7 +55,7 @@ class CustomerServiceTest {
         when(customerRepository.save(any(Customer.class)))
                 .thenAnswer(invocation -> Mono.just(invocation.getArgument(0)));
 
-        StepVerifier.create(customerService.updateContact("abc-123", "nuevo@mail.com", null))
+        StepVerifier.create(customerService.updateContact("abc-123", "nuevo@mail.com", null, null))
                 .expectNextCount(1)
                 .verifyComplete();
 
@@ -63,12 +65,49 @@ class CustomerServiceTest {
     }
 
     @Test
+    void updateContactWithMatchingIfMatchSaves() {
+        when(customerRepository.findById("abc-123")).thenReturn(Mono.just(customerWithContacts()));
+        when(customerRepository.save(any(Customer.class)))
+                .thenAnswer(invocation -> Mono.just(invocation.getArgument(0)));
+
+        StepVerifier.create(customerService.updateContact("abc-123", "nuevo@mail.com", null, "\"v1\""))
+                .expectNextCount(1)
+                .verifyComplete();
+    }
+
+    @Test
+    void updateContactWithStaleIfMatchFailsWith412AndDoesNotSave() {
+        when(customerRepository.findById("abc-123")).thenReturn(Mono.just(customerWithContacts()));
+
+        StepVerifier.create(customerService.updateContact("abc-123", "nuevo@mail.com", null, "\"v0\""))
+                .expectError(CustomerPreconditionFailedException.class)
+                .verify();
+
+        verify(customerRepository, never()).save(any());
+    }
+
+    @Test
+    void updateContactWhenCosmosRejectsVersionFailsWithModifiedAndDoesNotEvict() {
+        CosmosException preconditionFailed = mock(CosmosException.class);
+        when(preconditionFailed.getStatusCode()).thenReturn(412);
+        CosmosAccessException cosmosError = new CosmosAccessException("precondition failed", preconditionFailed);
+        when(customerRepository.findById("abc-123")).thenReturn(Mono.just(customerWithContacts()));
+        when(customerRepository.save(any(Customer.class))).thenReturn(Mono.error(cosmosError));
+
+        StepVerifier.create(customerService.updateContact("abc-123", "nuevo@mail.com", null, null))
+                .expectError(CustomerModifiedException.class)
+                .verify();
+
+        verify(customerCache, never()).evict(any());
+    }
+
+    @Test
     void updateContactDoesNotEvictWhenSaveFails() {
         when(customerRepository.findById("abc-123")).thenReturn(Mono.just(customerWithContacts()));
         when(customerRepository.save(any(Customer.class)))
                 .thenReturn(Mono.error(new IllegalStateException("Cosmos no disponible")));
 
-        StepVerifier.create(customerService.updateContact("abc-123", "nuevo@mail.com", null))
+        StepVerifier.create(customerService.updateContact("abc-123", "nuevo@mail.com", null, null))
                 .expectError(IllegalStateException.class)
                 .verify();
 
@@ -219,7 +258,7 @@ class CustomerServiceTest {
         when(customerRepository.save(any(Customer.class)))
                 .thenAnswer(invocation -> Mono.just(invocation.getArgument(0)));
 
-        StepVerifier.create(customerService.updateContact("abc-123", "nuevo@mail.com", null))
+        StepVerifier.create(customerService.updateContact("abc-123", "nuevo@mail.com", null, null))
                 .assertNext(updated -> {
                     assertThat(updated.getEmails()).containsExactly(
                             new Email("nuevo@mail.com", Email.Type.PERSONAL, true, false),
@@ -236,7 +275,7 @@ class CustomerServiceTest {
         when(customerRepository.save(any(Customer.class)))
                 .thenAnswer(invocation -> Mono.just(invocation.getArgument(0)));
 
-        StepVerifier.create(customerService.updateContact("abc-123", null, "+51911111111"))
+        StepVerifier.create(customerService.updateContact("abc-123", null, "+51911111111", null))
                 .assertNext(updated -> {
                     assertThat(updated.getPhones().getFirst())
                             .isEqualTo(new Phone("+51911111111", Phone.Type.MOBILE, true, false));
@@ -249,7 +288,7 @@ class CustomerServiceTest {
     void updateContactWithUnknownIdFailsWithNotFoundAndDoesNotSave() {
         when(customerRepository.findById("no-existe")).thenReturn(Mono.empty());
 
-        StepVerifier.create(customerService.updateContact("no-existe", "nuevo@mail.com", null))
+        StepVerifier.create(customerService.updateContact("no-existe", "nuevo@mail.com", null, null))
                 .expectError(CustomerNotFoundException.class)
                 .verify();
 
@@ -265,6 +304,7 @@ class CustomerServiceTest {
                 new Email("ana@mail.com", Email.Type.PERSONAL, true, true),
                 new Email("ana.q@empresa.pe", Email.Type.WORK, false, true)));
         customer.setPhones(List.of(new Phone("+51987654321", Phone.Type.MOBILE, true, true)));
+        customer.setEtag("\"v1\"");
         return customer;
     }
 }

@@ -7,6 +7,7 @@ import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 import org.springframework.data.annotation.Id;
+import org.springframework.data.annotation.Version;
 
 import java.time.Instant;
 import java.time.LocalDate;
@@ -41,4 +42,9 @@ public class Customer {
     private CustomerStatus status;
     private Instant createdAt;
     private Instant updatedAt;
+
+    // Versión del documento (_etag de Cosmos). Spring Data Cosmos copia _etag ↔ este campo y,
+    // al guardar, lo envía como condición: si otro cambio se guardó antes, Cosmos responde 412.
+    @Version
+    private String etag;
 }
