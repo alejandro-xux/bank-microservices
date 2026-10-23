@@ -19,12 +19,16 @@ repositories {
 
 ext {
 	set('springCloudAzureVersion', "7.3.0")
+	// Parches de seguridad de Jackson (GHSA-7hhh-6rmp-j9qf y otros); quitar al subir a un Boot que ya los traiga
+	set('jackson-bom.version', "3.1.8")
+	set('jackson-2-bom.version', "2.21.8")
 }
 
 dependencies {
 	implementation 'org.springframework.boot:spring-boot-starter-actuator'
 	implementation 'org.springframework.boot:spring-boot-starter-validation'
 	implementation 'org.springframework.boot:spring-boot-starter-webflux'
+	implementation 'org.springframework.boot:spring-boot-starter-data-redis-reactive'
 	implementation 'org.springdoc:springdoc-openapi-starter-webflux-ui:3.0.3'
 	implementation 'com.azure.spring:spring-cloud-azure-starter-actuator'
 	implementation 'com.azure.spring:spring-cloud-azure-starter-data-cosmos'
