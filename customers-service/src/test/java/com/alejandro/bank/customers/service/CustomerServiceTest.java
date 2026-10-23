@@ -13,6 +13,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 import reactor.test.StepVerifier;
 
@@ -31,6 +32,16 @@ class CustomerServiceTest {
     @InjectMocks
     CustomerService customerService;
 
+    private Customer newCustomer() {
+        return Customer.builder()
+                .documentType(DocumentType.DNI)
+                .documentNumber("12345678")
+                .firstName("Ana María")
+                .paternalLastName("Quispe")
+                .maternalLastName("Rojas")
+                .build();
+    }
+
     @Test
     void registerCompletesCustomerAndSavesIt() {
         when(customerRepository.save(any(Customer.class)))
@@ -47,8 +58,6 @@ class CustomerServiceTest {
                 })
                 .verifyComplete();
     }
-
-
 
     @Test
     void registerWithDuplicatedDocumentFailsWithConflict() {
@@ -98,15 +107,30 @@ class CustomerServiceTest {
                 .isEqualTo("ana maria nunez");
     }
 
+    @Test
+    void findByDniReturnsCustomer() {
+        when(customerRepository.findByDocumentKey("DNI#12345678")).thenReturn(Flux.just(newCustomer()));
 
+        StepVerifier.create(customerService.findByDni("12345678"))
+                .assertNext(found -> assertThat(found.getDocumentNumber()).isEqualTo("12345678"))
+                .verifyComplete();
+    }
 
-    private Customer newCustomer() {
-        return Customer.builder()
-                .documentType(DocumentType.DNI)
-                .documentNumber("12345678")
-                .firstName("Ana María")
-                .paternalLastName("Quispe")
-                .maternalLastName("Rojas")
-                .build();
+    @Test
+    void findByDniWithUnknownDniFailsWithNotFound() {
+        when(customerRepository.findByDocumentKey("DNI#87654321")).thenReturn(Flux.empty());
+
+        StepVerifier.create(customerService.findByDni("87654321"))
+                .expectError(CustomerNotFoundException.class)
+                .verify();
+    }
+
+    @Test
+    void searchByNameNormalizesTextAndCalculatesOffset() {
+        when(customerRepository.searchByName("quispe", 20, 20)).thenReturn(Flux.just(newCustomer()));
+
+        StepVerifier.create(customerService.searchByName("  QUÍSPE ", 1, 20))
+                .expectNextCount(1)
+                .verifyComplete();
     }
 }
