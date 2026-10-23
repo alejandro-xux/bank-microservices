@@ -16,7 +16,7 @@ import java.time.Duration;
 public class CustomerCache {
 
     static final Duration TTL = Duration.ofMinutes(10);
-    private static final String KEY_PREFIX = "customers:v1:";
+    private static final String KEY_PREFIX = "customers:v2:";
 
     private final ReactiveRedisTemplate<String, Customer> customerRedisTemplate;
 

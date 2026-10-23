@@ -41,7 +41,7 @@ import static org.mockito.Mockito.when;
 class CustomerCacheIntegrationTest {
 
     private static final String ID = "abc-123";
-    private static final String KEY = "customers:v1:" + ID;
+    private static final String KEY = "customers:v2:" + ID;
 
     @Container
     @ServiceConnection(name = "redis")

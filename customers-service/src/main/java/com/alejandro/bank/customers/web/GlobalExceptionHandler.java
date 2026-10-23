@@ -1,7 +1,9 @@
 package com.alejandro.bank.customers.web;
 
 import com.alejandro.bank.customers.exception.CustomerAlreadyExistsException;
+import com.alejandro.bank.customers.exception.CustomerModifiedException;
 import com.alejandro.bank.customers.exception.CustomerNotFoundException;
+import com.alejandro.bank.customers.exception.CustomerPreconditionFailedException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ProblemDetail;
 import org.springframework.web.bind.annotation.ExceptionHandler;
@@ -71,6 +73,22 @@ public class GlobalExceptionHandler {
                                 "message", String.valueOf(error.getDefaultMessage()))))
                 .toList();
         problem.setProperty("errors", errors);
+        return problem;
+    }
+
+    // 409: otro cambio se guardó entre nuestra lectura y nuestro guardado (_etag de Cosmos)
+    @ExceptionHandler(CustomerModifiedException.class)
+    public ProblemDetail handleModified(CustomerModifiedException ex) {
+        ProblemDetail problem = ProblemDetail.forStatusAndDetail(HttpStatus.CONFLICT, ex.getMessage());
+        problem.setTitle("Conflicto de concurrencia");
+        return problem;
+    }
+
+    // 412: el If-Match enviado no coincide con la versión actual
+    @ExceptionHandler(CustomerPreconditionFailedException.class)
+    public ProblemDetail handlePreconditionFailed(CustomerPreconditionFailedException ex) {
+        ProblemDetail problem = ProblemDetail.forStatusAndDetail(HttpStatus.PRECONDITION_FAILED, ex.getMessage());
+        problem.setTitle("Versión desactualizada");
         return problem;
     }
 }

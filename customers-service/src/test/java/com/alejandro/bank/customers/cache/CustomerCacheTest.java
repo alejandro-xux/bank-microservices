@@ -38,7 +38,7 @@ class CustomerCacheTest {
     @Test
     void getUsesVersionedKey() {
         Customer cached = Customer.builder().id("abc-123").build();
-        when(valueOperations.get("customers:v1:abc-123")).thenReturn(Mono.just(cached));
+        when(valueOperations.get("customers:v2:abc-123")).thenReturn(Mono.just(cached));
 
         StepVerifier.create(customerCache.get("abc-123"))
                 .expectNext(cached)
@@ -56,12 +56,12 @@ class CustomerCacheTest {
     @Test
     void putStoresWithTtl() {
         Customer customer = Customer.builder().id("abc-123").build();
-        when(valueOperations.set("customers:v1:abc-123", customer, CustomerCache.TTL)).thenReturn(Mono.just(true));
+        when(valueOperations.set("customers:v2:abc-123", customer, CustomerCache.TTL)).thenReturn(Mono.just(true));
 
         StepVerifier.create(customerCache.put(customer))
                 .verifyComplete();
 
-        verify(valueOperations).set("customers:v1:abc-123", customer, CustomerCache.TTL);
+        verify(valueOperations).set("customers:v2:abc-123", customer, CustomerCache.TTL);
     }
 
     @Test
@@ -75,17 +75,17 @@ class CustomerCacheTest {
 
     @Test
     void evictDeletesVersionedKey() {
-        when(customerRedisTemplate.delete("customers:v1:abc-123")).thenReturn(Mono.just(1L));
+        when(customerRedisTemplate.delete("customers:v2:abc-123")).thenReturn(Mono.just(1L));
 
         StepVerifier.create(customerCache.evict("abc-123"))
                 .verifyComplete();
 
-        verify(customerRedisTemplate).delete("customers:v1:abc-123");
+        verify(customerRedisTemplate).delete("customers:v2:abc-123");
     }
 
     @Test
     void evictWithRedisDownDoesNotFail() {
-        when(customerRedisTemplate.delete("customers:v1:abc-123"))
+        when(customerRedisTemplate.delete("customers:v2:abc-123"))
                 .thenReturn(Mono.error(new RedisConnectionFailureException("Redis caído")));
 
         StepVerifier.create(customerCache.evict("abc-123"))
