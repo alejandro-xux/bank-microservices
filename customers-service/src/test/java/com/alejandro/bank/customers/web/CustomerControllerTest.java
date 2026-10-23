@@ -11,6 +11,8 @@ import org.springframework.http.MediaType;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.reactive.server.WebTestClient;
 import reactor.core.publisher.Mono;
+import com.alejandro.bank.customers.exception.CustomerNotFoundException;
+import com.alejandro.bank.customers.domain.DocumentType;
 
 import java.time.Instant;
 
@@ -96,5 +98,44 @@ class CustomerControllerTest {
                 .expectHeader().contentType(MediaType.APPLICATION_PROBLEM_JSON)
                 .expectBody()
                 .jsonPath("$.detail").isEqualTo("Ya existe un cliente registrado con ese documento");
+    }
+
+    @Test
+    void findByIdReturns200WithoutInternalFields() {
+        Customer customer = Customer.builder()
+                .id("abc-123")
+                .documentKey("DNI#12345678")
+                .documentType(DocumentType.DNI)
+                .documentNumber("12345678")
+                .firstName("Ana María")
+                .searchName("ana maria")
+                .status(CustomerStatus.ACTIVE)
+                .createdAt(Instant.parse("2026-10-23T10:00:00Z"))
+                .build();
+        when(customerService.findById("abc-123")).thenReturn(Mono.just(customer));
+
+        webTestClient.get().uri("/customers/abc-123")
+                .exchange()
+                .expectStatus().isOk()
+                .expectBody()
+                .jsonPath("$.id").isEqualTo("abc-123")
+                .jsonPath("$.firstName").isEqualTo("Ana María")
+                .jsonPath("$.documentKey").doesNotExist()
+                .jsonPath("$.searchName").doesNotExist()
+                .jsonPath("$._etag").doesNotExist()
+                .jsonPath("$._ts").doesNotExist();
+    }
+
+    @Test
+    void findByIdWithUnknownIdReturns404() {
+        when(customerService.findById("no-existe"))
+                .thenReturn(Mono.error(new CustomerNotFoundException("no-existe")));
+
+        webTestClient.get().uri("/customers/no-existe")
+                .exchange()
+                .expectStatus().isNotFound()
+                .expectHeader().contentType(MediaType.APPLICATION_PROBLEM_JSON)
+                .expectBody()
+                .jsonPath("$.detail").isEqualTo("No existe un cliente con id no-existe");
     }
 }

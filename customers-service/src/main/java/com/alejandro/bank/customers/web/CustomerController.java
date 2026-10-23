@@ -7,10 +7,7 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
-import org.springframework.web.bind.annotation.PostMapping;
-import org.springframework.web.bind.annotation.RequestBody;
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.bind.annotation.*;
 import reactor.core.publisher.Mono;
 
 import java.net.URI;
@@ -33,5 +30,13 @@ public class CustomerController {
                 .map(body -> ResponseEntity
                         .created(URI.create("/customers/" + body.id()))
                         .body(body));
+    }
+
+    @GetMapping("/{id}")
+    @Operation(summary = "Consultar los datos de un cliente")
+    @ApiResponse(responseCode = "200", description = "Cliente encontrado")
+    @ApiResponse(responseCode = "404", description = "No existe un cliente con ese id")
+    public Mono<CustomerResponse> findById(@PathVariable String id) {
+        return customerService.findById(id).map(CustomerResponse::from);
     }
 }

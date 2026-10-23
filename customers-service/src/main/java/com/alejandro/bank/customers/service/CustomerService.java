@@ -8,6 +8,7 @@ import com.azure.spring.data.cosmos.exception.CosmosAccessException;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import reactor.core.publisher.Mono;
+import com.alejandro.bank.customers.exception.CustomerNotFoundException;
 
 import java.text.Normalizer;
 import java.time.Instant;
@@ -37,6 +38,11 @@ public class CustomerService {
 
         return customerRepository.save(customer)
                 .onErrorMap(CustomerService::isConflict, ex -> new CustomerAlreadyExistsException());
+    }
+
+    public Mono<Customer> findById(String id) {
+        return customerRepository.findById(id)
+                .switchIfEmpty(Mono.error(new CustomerNotFoundException(id)));
     }
 
     // "Ana María", "Quispe", "Rojas" -> "ana maria quispe rojas"
