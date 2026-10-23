@@ -11,7 +11,14 @@ import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.Size;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
-import org.springframework.web.bind.annotation.*;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PatchMapping;
+import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.bind.annotation.RestController;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 
@@ -65,5 +72,16 @@ public class CustomerController {
             @RequestParam(defaultValue = "20") @Min(value = 1, message = "debe ser al menos 1")
             @Max(value = 20, message = "no puede ser mayor que 20") int size) {
         return customerService.searchByName(name, page, size).map(CustomerResponse::from);
+    }
+
+    @PatchMapping("/{id}")
+    @Operation(summary = "Actualizar email y/o teléfono de un cliente")
+    @ApiResponse(responseCode = "200", description = "Contacto actualizado")
+    @ApiResponse(responseCode = "400", description = "Datos inválidos")
+    @ApiResponse(responseCode = "404", description = "No existe un cliente con ese id")
+    public Mono<CustomerResponse> updateContact(@PathVariable String id,
+                                                @Valid @RequestBody UpdateContactRequest request) {
+        return customerService.updateContact(id, request.email(), request.phone())
+                .map(CustomerResponse::from);
     }
 }

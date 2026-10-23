@@ -3,6 +3,8 @@ package com.alejandro.bank.customers.service;
 import com.alejandro.bank.customers.domain.Customer;
 import com.alejandro.bank.customers.domain.CustomerStatus;
 import com.alejandro.bank.customers.domain.DocumentType;
+import com.alejandro.bank.customers.domain.Email;
+import com.alejandro.bank.customers.domain.Phone;
 import com.alejandro.bank.customers.exception.CustomerAlreadyExistsException;
 import com.alejandro.bank.customers.exception.CustomerNotFoundException;
 import com.alejandro.bank.customers.repository.CustomerRepository;
@@ -15,6 +17,7 @@ import reactor.core.publisher.Mono;
 import java.text.Normalizer;
 import java.time.Instant;
 import java.util.Arrays;
+import java.util.List;
 import java.util.Locale;
 import java.util.Objects;
 import java.util.UUID;
@@ -57,6 +60,20 @@ public class CustomerService {
         return customerRepository.searchByName(normalize(name), page * size, size);
     }
 
+    public Mono<Customer> updateContact(String id, String email, String phone) {
+        return findById(id)
+                .flatMap(customer -> {
+                    if (email != null) {
+                        customer.setEmails(replacePrimaryEmail(customer.getEmails(), email));
+                    }
+                    if (phone != null) {
+                        customer.setPhones(replacePrimaryPhone(customer.getPhones(), phone));
+                    }
+                    customer.setUpdatedAt(Instant.now());
+                    return customerRepository.save(customer);
+                });
+    }
+
     // "Ana María", "Quispe", "Rojas" -> "ana maria quispe rojas"
     static String normalize(String... parts) {
         String joined = Arrays.stream(parts)
@@ -71,5 +88,19 @@ public class CustomerService {
         return ex instanceof CosmosAccessException cosmosEx
                 && cosmosEx.getCosmosException() != null
                 && cosmosEx.getCosmosException().getStatusCode() == HTTP_CONFLICT;
+    }
+
+
+    // Reemplaza el email principal; los demás se mantienen. El nuevo queda sin verificar.
+    private static List<Email> replacePrimaryEmail(List<Email> emails, String address) {
+        return emails.stream()
+                .map(e -> e.primary() ? new Email(address, e.type(), true, false) : e)
+                .toList();
+    }
+
+    private static List<Phone> replacePrimaryPhone(List<Phone> phones, String number) {
+        return phones.stream()
+                .map(p -> p.primary() ? new Phone(number, p.type(), true, false) : p)
+                .toList();
     }
 }

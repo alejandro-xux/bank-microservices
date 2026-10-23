@@ -21,7 +21,8 @@ public record CustomerResponse(
         List<Email> emails,
         List<Phone> phones,
         CustomerStatus status,
-        Instant createdAt
+        Instant createdAt,
+        Instant updatedAt
 ) {
     public static CustomerResponse from(Customer customer) {
         return new CustomerResponse(
@@ -35,6 +36,7 @@ public record CustomerResponse(
                 customer.getEmails(),
                 customer.getPhones(),
                 customer.getStatus(),
-                customer.getCreatedAt());
+                customer.getCreatedAt(),
+                customer.getUpdatedAt());
     }
 }
