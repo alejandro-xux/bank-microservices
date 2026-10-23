@@ -37,6 +37,15 @@ public class CustomerCache {
                 });
     }
 
+    public Mono<Void> evict(String id) {
+        return customerRedisTemplate.delete(key(id))
+                .then()
+                .onErrorResume(ex -> {
+                    log.warn("Redis no disponible al invalidar {}: {}", key(id), ex.getMessage());
+                    return Mono.empty();
+                });
+    }
+
     static String key(String id) {
         return KEY_PREFIX + id;
     }

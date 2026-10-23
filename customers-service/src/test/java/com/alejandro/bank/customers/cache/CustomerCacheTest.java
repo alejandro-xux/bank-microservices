@@ -14,6 +14,7 @@ import reactor.core.publisher.Mono;
 import reactor.test.StepVerifier;
 
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -31,7 +32,7 @@ class CustomerCacheTest {
 
     @BeforeEach
     void setUp() {
-        when(customerRedisTemplate.opsForValue()).thenReturn(valueOperations);
+        lenient().when(customerRedisTemplate.opsForValue()).thenReturn(valueOperations);
     }
 
     @Test
@@ -69,6 +70,25 @@ class CustomerCacheTest {
         when(valueOperations.set(any(), any(), any())).thenReturn(Mono.error(new RedisConnectionFailureException("Redis caído")));
 
         StepVerifier.create(customerCache.put(customer))
+                .verifyComplete();
+    }
+
+    @Test
+    void evictDeletesVersionedKey() {
+        when(customerRedisTemplate.delete("customers:v1:abc-123")).thenReturn(Mono.just(1L));
+
+        StepVerifier.create(customerCache.evict("abc-123"))
+                .verifyComplete();
+
+        verify(customerRedisTemplate).delete("customers:v1:abc-123");
+    }
+
+    @Test
+    void evictWithRedisDownDoesNotFail() {
+        when(customerRedisTemplate.delete("customers:v1:abc-123"))
+                .thenReturn(Mono.error(new RedisConnectionFailureException("Redis caído")));
+
+        StepVerifier.create(customerCache.evict("abc-123"))
                 .verifyComplete();
     }
 }

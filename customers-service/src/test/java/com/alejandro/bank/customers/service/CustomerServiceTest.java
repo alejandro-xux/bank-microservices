@@ -10,6 +10,7 @@ import com.azure.spring.data.cosmos.exception.CosmosAccessException;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.InOrder;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
@@ -43,6 +44,35 @@ class CustomerServiceTest {
     void emptyCache() {
         lenient().when(customerCache.get(any())).thenReturn(Mono.empty());
         lenient().when(customerCache.put(any())).thenReturn(Mono.empty());
+        lenient().when(customerCache.evict(any())).thenReturn(Mono.empty());
+    }
+
+    @Test
+    void updateContactEvictsCacheAfterSaving() {
+        when(customerRepository.findById("abc-123")).thenReturn(Mono.just(customerWithContacts()));
+        when(customerRepository.save(any(Customer.class)))
+                .thenAnswer(invocation -> Mono.just(invocation.getArgument(0)));
+
+        StepVerifier.create(customerService.updateContact("abc-123", "nuevo@mail.com", null))
+                .expectNextCount(1)
+                .verifyComplete();
+
+        InOrder inOrder = inOrder(customerRepository, customerCache);
+        inOrder.verify(customerRepository).save(any(Customer.class));
+        inOrder.verify(customerCache).evict("abc-123");
+    }
+
+    @Test
+    void updateContactDoesNotEvictWhenSaveFails() {
+        when(customerRepository.findById("abc-123")).thenReturn(Mono.just(customerWithContacts()));
+        when(customerRepository.save(any(Customer.class)))
+                .thenReturn(Mono.error(new IllegalStateException("Cosmos no disponible")));
+
+        StepVerifier.create(customerService.updateContact("abc-123", "nuevo@mail.com", null))
+                .expectError(IllegalStateException.class)
+                .verify();
+
+        verify(customerCache, never()).evict(any());
     }
 
     @Test
