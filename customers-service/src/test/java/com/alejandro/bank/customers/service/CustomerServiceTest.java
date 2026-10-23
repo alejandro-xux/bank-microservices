@@ -1,11 +1,13 @@
 package com.alejandro.bank.customers.service;
 
+import com.alejandro.bank.customers.cache.CustomerCache;
 import com.alejandro.bank.customers.domain.*;
 import com.alejandro.bank.customers.exception.CustomerAlreadyExistsException;
 import com.alejandro.bank.customers.exception.CustomerNotFoundException;
 import com.alejandro.bank.customers.repository.CustomerRepository;
 import com.azure.cosmos.CosmosException;
 import com.azure.spring.data.cosmos.exception.CosmosAccessException;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
@@ -21,6 +23,7 @@ import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.*;
 
 @ExtendWith(MockitoExtension.class)
@@ -29,8 +32,55 @@ class CustomerServiceTest {
     @Mock
     CustomerRepository customerRepository;
 
+    @Mock
+    CustomerCache customerCache;
+
     @InjectMocks
     CustomerService customerService;
+
+    // Por defecto el cache está vacío (miss) y guardar no falla; cada prueba puede cambiarlo
+    @BeforeEach
+    void emptyCache() {
+        lenient().when(customerCache.get(any())).thenReturn(Mono.empty());
+        lenient().when(customerCache.put(any())).thenReturn(Mono.empty());
+    }
+
+    @Test
+    void findByIdWithCacheHitDoesNotQueryCosmos() {
+        Customer cached = newCustomer();
+        cached.setId("abc-123");
+        when(customerCache.get("abc-123")).thenReturn(Mono.just(cached));
+
+        StepVerifier.create(customerService.findById("abc-123"))
+                .assertNext(found -> assertThat(found.getId()).isEqualTo("abc-123"))
+                .verifyComplete();
+
+        verify(customerRepository, never()).findById(anyString());
+    }
+
+    @Test
+    void findByIdWithCacheMissReadsCosmosAndStoresInCache() {
+        Customer existing = newCustomer();
+        existing.setId("abc-123");
+        when(customerRepository.findById("abc-123")).thenReturn(Mono.just(existing));
+
+        StepVerifier.create(customerService.findById("abc-123"))
+                .assertNext(found -> assertThat(found.getId()).isEqualTo("abc-123"))
+                .verifyComplete();
+
+        verify(customerCache).put(existing);
+    }
+
+    @Test
+    void findByIdWithUnknownIdDoesNotStoreInCache() {
+        when(customerRepository.findById("no-existe")).thenReturn(Mono.empty());
+
+        StepVerifier.create(customerService.findById("no-existe"))
+                .expectError(CustomerNotFoundException.class)
+                .verify();
+
+        verify(customerCache, never()).put(any());
+    }
 
     private Customer newCustomer() {
         return Customer.builder()
