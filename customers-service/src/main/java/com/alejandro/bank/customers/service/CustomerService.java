@@ -1,5 +1,6 @@
 package com.alejandro.bank.customers.service;
 
+import com.alejandro.bank.customers.cache.CustomerCache;
 import com.alejandro.bank.customers.domain.Customer;
 import com.alejandro.bank.customers.domain.CustomerStatus;
 import com.alejandro.bank.customers.domain.DocumentType;
@@ -30,6 +31,7 @@ public class CustomerService {
     private static final int HTTP_CONFLICT = 409;
 
     private final CustomerRepository customerRepository;
+    private final CustomerCache customerCache;
 
     public Mono<Customer> register(Customer customer) {
         Instant now = Instant.now();
@@ -45,9 +47,11 @@ public class CustomerService {
                 .onErrorMap(CustomerService::isConflict, ex -> new CustomerAlreadyExistsException());
     }
 
+    // Cache Aside: primero Redis; si no está (o Redis falla), Cosmos y se guarda en Redis
     public Mono<Customer> findById(String id) {
-        return customerRepository.findById(id)
-                .switchIfEmpty(Mono.error(new CustomerNotFoundException(id)));
+        return customerCache.get(id)
+                .switchIfEmpty(Mono.defer(() -> findInDatabase(id)
+                        .flatMap(customer -> customerCache.put(customer).thenReturn(customer))));
     }
 
     public Mono<Customer> findByDni(String dni) {
@@ -61,7 +65,7 @@ public class CustomerService {
     }
 
     public Mono<Customer> updateContact(String id, String email, String phone) {
-        return findById(id)
+        return findInDatabase(id)
                 .flatMap(customer -> {
                     if (email != null) {
                         customer.setEmails(replacePrimaryEmail(customer.getEmails(), email));
@@ -72,6 +76,12 @@ public class CustomerService {
                     customer.setUpdatedAt(Instant.now());
                     return customerRepository.save(customer);
                 });
+    }
+
+    // Lectura directa de Cosmos, la fuente de verdad (la usa updateContact para no modificar una copia del cache)
+    private Mono<Customer> findInDatabase(String id) {
+        return customerRepository.findById(id)
+                .switchIfEmpty(Mono.error(new CustomerNotFoundException(id)));
     }
 
     // "Ana María", "Quispe", "Rojas" -> "ana maria quispe rojas"
