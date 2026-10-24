@@ -6,6 +6,7 @@ programación reactiva, Kafka, Azure y Quarkus.
 ## Componentes
 | Servicio | Stack |
 |---|---|
+| config-server | Spring Cloud Config (backend native sobre `config-repo/`) |
 | customers-service | Spring WebFlux + Cosmos DB + Redis (cache) |
 | accounts-service | Spring MVC + JPA + PostgreSQL |
 | notifications-service | Spring Kafka + Resilience4j |
@@ -44,13 +45,30 @@ echo "$TOKEN" | cut -d. -f2 | python3 -c "import sys,json,base64; p=sys.stdin.re
 
 El token dura 5 minutos. El vínculo cuenta ↔ cliente es el campo `identityId` del documento del cliente en Cosmos, que debe ser igual al `oid` del usuario. En local se agrega a mano en Azure Portal → Cosmos DB → Data Explorer → `bank` / `customers`: abrir el documento de Ana (DNI 12345678), añadir `"identityId": "4f8c2a1e-6b3d-4c9a-9e7f-2d5b8a1c3e01"` y guardar.
 
+### Versiones y configuración centralizadas
+- **`platform-bom/`**: las versiones de todo el sistema (Spring Boot, Spring Cloud, Spring Cloud Azure, parches de Jackson, springdoc), como el BOM corporativo de un banco. Cada servicio es un proyecto Gradle independiente que lo importa con `includeBuild('../platform-bom')`; para cambiar una versión se edita solo ese archivo.
+- **`config-repo/`**: la configuración que sirve el config-server. `application.yml` es la común a todos (emisor y audiencia del token, roles) y `<servicio>.yml` la de cada uno. El repositorio es público, así que **aquí nunca van secretos**: las credenciales siguen en variables de entorno.
+
+### config-server
+Se levanta **antes** que los servicios (puerto 8888):
+
+```bash
+cd config-server
+./gradlew bootRun
+curl http://localhost:8888/customers-service/default   # la configuración que recibirá customers-service
+```
+
+Lee `config-repo/` (otra carpeta con `CONFIG_REPO`). Un cambio en `config-repo/` se aplica reiniciando el servicio que lo usa.
+
 ### customers-service
-Necesita las variables `COSMOS_ENDPOINT` y `COSMOS_KEY`. Son opcionales `REDIS_HOST` y `REDIS_PORT` (por defecto `localhost:6380`) y `AUTH_ISSUER_URI` y `AUTH_AUDIENCE` (por defecto el Keycloak local: `http://localhost:8180/realms/bank` y `customers-service`; en Azure apuntan a Microsoft Entra).
+Necesita el config-server arriba y las variables `COSMOS_ENDPOINT` y `COSMOS_KEY`. Son opcionales `CONFIG_SERVER_URL` (por defecto `http://localhost:8888`), `REDIS_HOST` y `REDIS_PORT` (por defecto `localhost:6380`) y `AUTH_ISSUER_URI` y `AUTH_AUDIENCE` (por defecto el Keycloak local: `http://localhost:8180/realms/bank` y `customers-service`; en Azure apuntan a Microsoft Entra).
 
 ```bash
 cd customers-service
 ./gradlew bootRun
 ```
+
+Si el config-server no responde, el servicio no arranca y lo indica en el log (`Could not locate PropertySource and the fail fast property is set`): es a propósito, para no arrancar sin configuración.
 
 La API exige un token (`Authorization: Bearer …`); sin él, o con uno inválido, vencido o de otra audiencia, responde 401. Solo `/actuator/health/**` y la documentación (`/v3/api-docs`, Swagger UI) son públicos. Con el `TOKEN` obtenido arriba:
 
@@ -74,10 +92,10 @@ Los 401 y 403 responden en formato ProblemDetail (`application/problem+json`), i
 
 ### Pruebas
 ```bash
-cd customers-service
-./gradlew test
+cd customers-service && ./gradlew test
+cd config-server && ./gradlew test
 ```
-No necesitan credenciales de Azure (Cosmos está simulado), pero sí Docker encendido: Testcontainers levanta Redis para las pruebas de cache y un Keycloak con `infra/keycloak/bank-realm.json` para probar la seguridad con tokens reales (firma, `iss`, `aud`, roles y `oid`).
+No necesitan el config-server encendido (las de customers-service leen `config-repo/` directamente) ni credenciales de Azure (Cosmos está simulado), pero sí Docker encendido: Testcontainers levanta Redis para las pruebas de cache y un Keycloak con `infra/keycloak/bank-realm.json` para probar la seguridad con tokens reales (firma, `iss`, `aud`, roles y `oid`).
 
 ## Gestión
 - Jira: proyecto `BANK`

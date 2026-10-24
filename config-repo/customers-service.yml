@@ -1,0 +1,29 @@
+# Configuración de customers-service, servida por el config-server (BANK-43).
+# Las credenciales de Cosmos NO van aquí: siguen en variables de entorno (application.yaml del servicio).
+spring:
+  data:
+    redis:
+      host: ${REDIS_HOST:localhost}
+      port: ${REDIS_PORT:6380}
+      timeout: 200ms
+
+springdoc:
+  swagger-ui:
+    oauth:
+      # Cliente público del navegador (bank-web en Keycloak): login con PKCE, sin secreto
+      client-id: ${SWAGGER_CLIENT_ID:bank-web}
+      use-pkce-with-authorization-code-grant: true
+
+server:
+  port: 8081
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
+  endpoint:
+    health:
+      show-components: always
+      probes:
+        enabled: true

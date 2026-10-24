@@ -1,4 +1,9 @@
 spring:
+  # Las pruebas no usan el config-server: leen los mismos archivos de config-repo/ directamente
+  config:
+    import:
+      - file:../config-repo/application.yml
+      - file:../config-repo/customers-service.yml
   cloud:
     azure:
       cosmos:

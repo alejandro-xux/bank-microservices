@@ -1,0 +1,21 @@
+spring:
+  application:
+    name: config-server
+  profiles:
+    # Backend native: lee archivos de una carpeta (decisión S5 del spike BANK-42)
+    active: native
+  cloud:
+    config:
+      server:
+        native:
+          # config-repo/ del repositorio; en Docker o en otra máquina se cambia con CONFIG_REPO
+          search-locations: file:${CONFIG_REPO:../config-repo}
+
+server:
+  port: 8888
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
