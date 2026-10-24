@@ -1,0 +1,157 @@
+{
+  "realm": "bank",
+  "displayName": "Bank (solo local)",
+  "enabled": true,
+  "registrationAllowed": false,
+  "bruteForceProtected": true,
+  "accessTokenLifespan": 300,
+  "ssoSessionIdleTimeout": 900,
+  "ssoSessionMaxLifespan": 1800,
+  "roles": {
+    "realm": [
+      { "name": "CUSTOMER", "description": "Cliente del banco: solo sus propios datos" },
+      { "name": "ADMIN", "description": "Asesor del banco" }
+    ]
+  },
+  "clients": [
+    {
+      "clientId": "bank-cli",
+      "name": "Terminal (solo local)",
+      "description": "Pide tokens con usuario y contraseña desde curl. No existe en Azure.",
+      "enabled": true,
+      "publicClient": true,
+      "standardFlowEnabled": false,
+      "directAccessGrantsEnabled": true,
+      "fullScopeAllowed": false,
+      "protocolMappers": [
+        {
+          "name": "roles",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-usermodel-realm-role-mapper",
+          "config": {
+            "claim.name": "roles",
+            "multivalued": "true",
+            "jsonType.label": "String",
+            "access.token.claim": "true",
+            "id.token.claim": "false",
+            "userinfo.token.claim": "false",
+            "introspection.token.claim": "true"
+          }
+        },
+        {
+          "name": "oid",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-usermodel-property-mapper",
+          "config": {
+            "user.attribute": "id",
+            "claim.name": "oid",
+            "jsonType.label": "String",
+            "access.token.claim": "true",
+            "id.token.claim": "true",
+            "userinfo.token.claim": "true",
+            "introspection.token.claim": "true"
+          }
+        },
+        {
+          "name": "audience customers-service",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-audience-mapper",
+          "config": {
+            "included.custom.audience": "customers-service",
+            "access.token.claim": "true",
+            "id.token.claim": "false",
+            "introspection.token.claim": "true"
+          }
+        }
+      ]
+    },
+    {
+      "clientId": "bank-web",
+      "name": "App web y Swagger UI",
+      "description": "Authorization Code + PKCE, como una app real.",
+      "enabled": true,
+      "publicClient": true,
+      "standardFlowEnabled": true,
+      "directAccessGrantsEnabled": false,
+      "fullScopeAllowed": false,
+      "redirectUris": [
+        "http://localhost:8081/swagger-ui/oauth2-redirect.html",
+        "http://localhost:3000/*"
+      ],
+      "webOrigins": ["http://localhost:8081", "http://localhost:3000"],
+      "attributes": {
+        "pkce.code.challenge.method": "S256",
+        "post.logout.redirect.uris": "http://localhost:3000/*"
+      },
+      "protocolMappers": [
+        {
+          "name": "roles",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-usermodel-realm-role-mapper",
+          "config": {
+            "claim.name": "roles",
+            "multivalued": "true",
+            "jsonType.label": "String",
+            "access.token.claim": "true",
+            "id.token.claim": "false",
+            "userinfo.token.claim": "false",
+            "introspection.token.claim": "true"
+          }
+        },
+        {
+          "name": "oid",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-usermodel-property-mapper",
+          "config": {
+            "user.attribute": "id",
+            "claim.name": "oid",
+            "jsonType.label": "String",
+            "access.token.claim": "true",
+            "id.token.claim": "true",
+            "userinfo.token.claim": "true",
+            "introspection.token.claim": "true"
+          }
+        },
+        {
+          "name": "audience customers-service",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-audience-mapper",
+          "config": {
+            "included.custom.audience": "customers-service",
+            "access.token.claim": "true",
+            "id.token.claim": "false",
+            "introspection.token.claim": "true"
+          }
+        }
+      ]
+    }
+  ],
+  "scopeMappings": [
+    { "client": "bank-cli", "roles": ["CUSTOMER", "ADMIN"] },
+    { "client": "bank-web", "roles": ["CUSTOMER", "ADMIN"] }
+  ],
+  "users": [
+    {
+      "id": "4f8c2a1e-6b3d-4c9a-9e7f-2d5b8a1c3e01",
+      "username": "ana",
+      "email": "ana@mail.com",
+      "emailVerified": true,
+      "firstName": "Ana María",
+      "lastName": "Quispe Rojas",
+      "enabled": true,
+      "credentials": [{ "type": "password", "value": "ana-local", "temporary": false }],
+      "realmRoles": ["CUSTOMER"]
+    },
+    {
+      "id": "7b2e9d4c-1a5f-4e8b-b3c6-9f0a2d4e6b02",
+      "username": "asesor",
+      "email": "asesor@bank.local",
+      "emailVerified": true,
+      "firstName": "Asesor",
+      "lastName": "De Prueba",
+      "enabled": true,
+      "credentials": [{ "type": "password", "value": "asesor-local", "temporary": false }],
+      "realmRoles": ["ADMIN"]
+    }
+  ]
+}
