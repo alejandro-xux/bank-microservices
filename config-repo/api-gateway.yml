@@ -1,0 +1,30 @@
+# Configuración del api-gateway, servida por el config-server (BANK-45).
+# Emisor/audiencia del token y la URL de Eureka vienen de application.yml (común).
+server:
+  port: 8080
+
+spring:
+  cloud:
+    gateway:
+      server:
+        webflux:
+          routes:
+            # /api/customers/** → customers-service (dirección resuelta en Eureka), sin el prefijo /api.
+            # El header Authorization se reenvía tal cual: el servicio vuelve a validar el token.
+            # CUSTOMERS_SERVICE_URI permite apuntar a una URL fija (pruebas o sin Eureka).
+            - id: customers
+              uri: ${CUSTOMERS_SERVICE_URI:lb://customers-service}
+              predicates:
+                - Path=/api/customers/**
+              filters:
+                - StripPrefix=1
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
+  endpoint:
+    health:
+      probes:
+        enabled: true
