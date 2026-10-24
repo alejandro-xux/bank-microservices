@@ -8,3 +8,8 @@ spring:
     azure:
       cosmos:
         enabled: false
+
+# Las pruebas no se registran en Eureka (no necesitan el discovery-server)
+eureka:
+  client:
+    enabled: false

@@ -12,3 +12,10 @@ spring:
           # Roles del claim "roles" (CUSTOMER → ROLE_CUSTOMER), igual en Keycloak y en Entra (app roles)
           authorities-claim-name: roles
           authority-prefix: ROLE_
+
+# Todos los servicios se registran en Eureka con su spring.application.name (BANK-44).
+# En AKS (E12) Eureka se reemplaza por Services y DNS de Kubernetes.
+eureka:
+  client:
+    service-url:
+      defaultZone: ${EUREKA_URL:http://localhost:8761/eureka}
