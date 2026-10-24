@@ -1,6 +1,7 @@
 package com.alejandro.bank.customers.security;
 
 import com.alejandro.bank.customers.config.SecurityConfig;
+import com.alejandro.bank.customers.domain.Customer;
 import com.alejandro.bank.customers.exception.CustomerNotFoundException;
 import com.alejandro.bank.customers.service.CustomerService;
 import lombok.RequiredArgsConstructor;
@@ -34,6 +35,17 @@ public class CustomerAccessPolicy {
                 .filter(customer -> oid.equals(customer.getIdentityId()))
                 .switchIfEmpty(Mono.error(denied()))
                 .then();
+    }
+
+    // GET /customers/me: el cliente se busca por el oid del token, no por un id de la URL.
+    // Sin rol CUSTOMER (p. ej. el asesor), sin oid o sin cliente vinculado → el mismo 403.
+    public Mono<Customer> ownCustomer(Authentication authentication) {
+        String oid = oid(authentication);
+        if (oid == null || !hasRole(authentication, SecurityConfig.CUSTOMER)) {
+            return Mono.error(denied());
+        }
+        return customerService.findByIdentityId(oid)
+                .switchIfEmpty(Mono.error(denied()));
     }
 
     private static boolean hasRole(Authentication authentication, String role) {

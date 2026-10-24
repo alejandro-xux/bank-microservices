@@ -10,6 +10,9 @@ public interface CustomerRepository extends ReactiveCosmosRepository<Customer, S
 
     Flux<Customer> findByDocumentKey(String documentKey);
 
+    // identityId no es la partition key: consulta en todas las particiones (cross-partition)
+    Flux<Customer> findByIdentityId(String identityId);
+
     @Query("SELECT * FROM c WHERE CONTAINS(c.searchName, @name) ORDER BY c.searchName OFFSET @offset LIMIT @limit")
     Flux<Customer> searchByName(@Param("name") String name, @Param("offset") int offset, @Param("limit") int limit);
 }

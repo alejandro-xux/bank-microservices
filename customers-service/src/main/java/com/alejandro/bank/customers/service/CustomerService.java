@@ -13,6 +13,7 @@ import com.alejandro.bank.customers.exception.CustomerPreconditionFailedExceptio
 import com.alejandro.bank.customers.repository.CustomerRepository;
 import com.azure.spring.data.cosmos.exception.CosmosAccessException;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
@@ -26,6 +27,7 @@ import java.util.Objects;
 import java.util.UUID;
 import java.util.stream.Collectors;
 
+@Slf4j
 @Service
 @RequiredArgsConstructor
 public class CustomerService {
@@ -61,6 +63,20 @@ public class CustomerService {
         return customerRepository.findByDocumentKey(DocumentType.DNI + "#" + dni)
                 .next()
                 .switchIfEmpty(Mono.error(new CustomerNotFoundException()));
+    }
+
+    // Cliente vinculado a la cuenta (identityId = oid del token); vacío si no hay ninguno.
+    // Dos clientes con el mismo vínculo sería un error de datos: se usa el primero y se avisa en el log.
+    public Mono<Customer> findByIdentityId(String identityId) {
+        return customerRepository.findByIdentityId(identityId)
+                .take(2)
+                .collectList()
+                .flatMap(customers -> {
+                    if (customers.size() > 1) {
+                        log.warn("Más de un cliente vinculado a la misma identidad; se usa {}", customers.getFirst().getId());
+                    }
+                    return Mono.justOrEmpty(customers.stream().findFirst());
+                });
     }
 
     public Flux<Customer> searchByName(String name, int page, int size) {

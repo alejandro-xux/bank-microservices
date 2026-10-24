@@ -502,4 +502,46 @@ class CustomerControllerTest {
 
         verify(customerService, never()).findById(any());
     }
+
+    @Test
+    void customerReadsMeReturns200WithETag() {
+        Customer customer = ana();
+        customer.setEtag("\"v1\"");
+        when(customerService.findByIdentityId(ANA_OID)).thenReturn(Mono.just(customer));
+
+        anaClient.get().uri("/customers/me")
+                .exchange()
+                .expectStatus().isOk()
+                .expectHeader().valueEquals("ETag", "\"v1\"")
+                .expectBody()
+                .jsonPath("$.id").isEqualTo("abc-123");
+
+        // "me" no se interpreta como un id
+        verify(customerService, never()).findById(any());
+    }
+
+    @Test
+    void customerWithoutLinkedCustomerReadingMeReturns403() {
+        when(customerService.findByIdentityId(ANA_OID)).thenReturn(Mono.empty());
+
+        anaClient.get().uri("/customers/me")
+                .exchange()
+                .expectStatus().isForbidden();
+    }
+
+    @Test
+    void adminReadingMeReturns403() {
+        webTestClient.get().uri("/customers/me")
+                .exchange()
+                .expectStatus().isForbidden();
+
+        verify(customerService, never()).findByIdentityId(any());
+    }
+
+    @Test
+    void meWithoutTokenReturns401() {
+        anonymousClient.get().uri("/customers/me")
+                .exchange()
+                .expectStatus().isUnauthorized();
+    }
 }
