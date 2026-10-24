@@ -64,6 +64,7 @@ Los permisos salen del claim `roles` del token; si el rol no alcanza, la respues
 |---|---|---|
 | `POST /customers`, `GET /customers?dni=`, `GET /customers/search` | ✅ | 403 |
 | `GET` y `PATCH /customers/{id}` | ✅ cualquiera (404 si no existe) | solo el suyo (`identityId` = su `oid`) |
+| `GET /customers/me` (mis datos, sin conocer el id) | 403 (no es cliente) | ✅ el vinculado a su `oid`; sin vínculo → 403 |
 
 Un `CUSTOMER` que pide otro cliente o un id que no existe recibe el mismo 403, para no revelar qué clientes existen.
 

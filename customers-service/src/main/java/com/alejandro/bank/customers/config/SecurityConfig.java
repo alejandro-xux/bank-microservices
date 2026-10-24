@@ -37,6 +37,8 @@ public class SecurityConfig {
                         // Registrar y buscar clientes: solo el asesor
                         .pathMatchers(HttpMethod.POST, "/customers").hasRole(ADMIN)
                         .pathMatchers(HttpMethod.GET, "/customers", "/customers/search").hasRole(ADMIN)
+                        // Mis datos: solo un cliente (el asesor no tiene ficha de cliente)
+                        .pathMatchers(HttpMethod.GET, "/customers/me").hasRole(CUSTOMER)
                         // /customers/{id}: asesor o cliente; que sea el dueño lo revisa CustomerAccessPolicy
                         .pathMatchers("/customers/**").hasAnyRole(ADMIN, CUSTOMER)
                         .anyExchange().authenticated())

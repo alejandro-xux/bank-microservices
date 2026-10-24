@@ -81,6 +81,41 @@ class CustomerAccessPolicyTest {
         verify(customerService, never()).findById(any());
     }
 
+    @Test
+    void ownCustomerIsFoundByOid() {
+        Customer ana = customer(ANA_OID);
+        when(customerService.findByIdentityId(ANA_OID)).thenReturn(Mono.just(ana));
+
+        StepVerifier.create(policy.ownCustomer(token(ANA_OID, "ROLE_CUSTOMER")))
+                .expectNext(ana)
+                .verifyComplete();
+    }
+
+    @Test
+    void ownCustomerWithoutLinkedCustomerIsDenied() {
+        when(customerService.findByIdentityId(ANA_OID)).thenReturn(Mono.empty());
+
+        StepVerifier.create(policy.ownCustomer(token(ANA_OID, "ROLE_CUSTOMER")))
+                .verifyError(AccessDeniedException.class);
+    }
+
+    // El asesor no tiene ficha de cliente
+    @Test
+    void ownCustomerForAdminIsDeniedWithoutQuerying() {
+        StepVerifier.create(policy.ownCustomer(token("7b2e9d4c-1a5f-4e8b-b3c6-9f0a2d4e6b02", "ROLE_ADMIN")))
+                .verifyError(AccessDeniedException.class);
+
+        verify(customerService, never()).findByIdentityId(any());
+    }
+
+    @Test
+    void ownCustomerWithoutOidIsDenied() {
+        StepVerifier.create(policy.ownCustomer(token(null, "ROLE_CUSTOMER")))
+                .verifyError(AccessDeniedException.class);
+
+        verify(customerService, never()).findByIdentityId(any());
+    }
+
     private static Authentication token(String oid, String... authorities) {
         Jwt.Builder jwt = Jwt.withTokenValue("token").header("alg", "RS256").subject("user");
         if (oid != null) {

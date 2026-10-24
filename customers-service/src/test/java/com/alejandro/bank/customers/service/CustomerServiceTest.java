@@ -295,6 +295,36 @@ class CustomerServiceTest {
         verify(customerRepository, never()).save(any());
     }
 
+    @Test
+    void findByIdentityIdReturnsLinkedCustomer() {
+        Customer ana = Customer.builder().id("abc-123").identityId("oid-ana").build();
+        when(customerRepository.findByIdentityId("oid-ana")).thenReturn(Flux.just(ana));
+
+        StepVerifier.create(customerService.findByIdentityId("oid-ana"))
+                .expectNext(ana)
+                .verifyComplete();
+    }
+
+    @Test
+    void findByIdentityIdWithoutLinkedCustomerIsEmpty() {
+        when(customerRepository.findByIdentityId("oid-sin-cliente")).thenReturn(Flux.empty());
+
+        StepVerifier.create(customerService.findByIdentityId("oid-sin-cliente"))
+                .verifyComplete();
+    }
+
+    // Dato inconsistente (dos clientes con el mismo vínculo): se usa el primero
+    @Test
+    void findByIdentityIdWithDuplicatedLinkUsesFirst() {
+        Customer first = Customer.builder().id("abc-123").identityId("oid-ana").build();
+        Customer second = Customer.builder().id("def-456").identityId("oid-ana").build();
+        when(customerRepository.findByIdentityId("oid-ana")).thenReturn(Flux.just(first, second));
+
+        StepVerifier.create(customerService.findByIdentityId("oid-ana"))
+                .expectNext(first)
+                .verifyComplete();
+    }
+
     private Customer customerWithContacts() {
         Customer customer = newCustomer();
         customer.setId("abc-123");

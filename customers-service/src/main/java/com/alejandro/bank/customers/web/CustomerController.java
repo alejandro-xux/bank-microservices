@@ -50,6 +50,14 @@ public class CustomerController {
                         .body(body));
     }
 
+    @GetMapping("/me")
+    @Operation(summary = "Consultar mis datos (el cliente vinculado al token)")
+    @ApiResponse(responseCode = "200", description = "Mis datos")
+    @ApiResponse(responseCode = "403", description = "El token no es de un cliente o no tiene un cliente vinculado")
+    public Mono<ResponseEntity<CustomerResponse>> findMe(Authentication authentication) {
+        return accessPolicy.ownCustomer(authentication).map(CustomerController::withETag);
+    }
+
     @GetMapping("/{id}")
     @Operation(summary = "Consultar los datos de un cliente")
     @ApiResponse(responseCode = "200", description = "Cliente encontrado")
