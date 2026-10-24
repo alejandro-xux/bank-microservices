@@ -1,6 +1,7 @@
 package com.alejandro.bank.customers.web;
 
 import com.alejandro.bank.customers.domain.Customer;
+import com.alejandro.bank.customers.security.CustomerAccessPolicy;
 import com.alejandro.bank.customers.service.CustomerService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
@@ -13,6 +14,7 @@ import jakarta.validation.constraints.Size;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -33,6 +35,7 @@ import java.net.URI;
 @Tag(name = "Customers", description = "Registro y consulta de clientes")
 public class CustomerController {
     private final CustomerService customerService;
+    private final CustomerAccessPolicy accessPolicy;
 
     @PostMapping
     @Operation(summary = "Registrar un cliente con su DNI")
@@ -50,9 +53,12 @@ public class CustomerController {
     @GetMapping("/{id}")
     @Operation(summary = "Consultar los datos de un cliente")
     @ApiResponse(responseCode = "200", description = "Cliente encontrado")
-    @ApiResponse(responseCode = "404", description = "No existe un cliente con ese id")
-    public Mono<ResponseEntity<CustomerResponse>> findById(@PathVariable String id) {
-        return customerService.findById(id).map(CustomerController::withETag);
+    @ApiResponse(responseCode = "403", description = "El cliente no es el dueño (o el id no existe)")
+    @ApiResponse(responseCode = "404", description = "No existe un cliente con ese id (solo ADMIN)")
+    public Mono<ResponseEntity<CustomerResponse>> findById(@PathVariable String id, Authentication authentication) {
+        return accessPolicy.checkAccess(id, authentication)
+                .then(Mono.defer(() -> customerService.findById(id)))
+                .map(CustomerController::withETag);
     }
 
     @GetMapping(params = "dni")
@@ -81,14 +87,18 @@ public class CustomerController {
     @Operation(summary = "Actualizar email y/o teléfono de un cliente")
     @ApiResponse(responseCode = "200", description = "Contacto actualizado")
     @ApiResponse(responseCode = "400", description = "Datos inválidos")
-    @ApiResponse(responseCode = "404", description = "No existe un cliente con ese id")
+    @ApiResponse(responseCode = "403", description = "El cliente no es el dueño (o el id no existe)")
+    @ApiResponse(responseCode = "404", description = "No existe un cliente con ese id (solo ADMIN)")
     @ApiResponse(responseCode = "409", description = "El cliente fue modificado por otra operación")
     @ApiResponse(responseCode = "412", description = "If-Match no coincide con la versión actual")
     public Mono<ResponseEntity<CustomerResponse>> updateContact(
             @PathVariable String id,
             @RequestHeader(value = HttpHeaders.IF_MATCH, required = false) String ifMatch,
-            @Valid @RequestBody UpdateContactRequest request) {
-        return customerService.updateContact(id, request.email(), request.phone(), ifMatch)
+            @Valid @RequestBody UpdateContactRequest request,
+            Authentication authentication) {
+        // Primero el acceso: si no es el dueño, no se toca Cosmos
+        return accessPolicy.checkAccess(id, authentication)
+                .then(Mono.defer(() -> customerService.updateContact(id, request.email(), request.phone(), ifMatch)))
                 .map(CustomerController::withETag);
     }
 

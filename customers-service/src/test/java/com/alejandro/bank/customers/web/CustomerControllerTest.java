@@ -5,6 +5,7 @@ import com.alejandro.bank.customers.domain.Customer;
 import com.alejandro.bank.customers.domain.CustomerStatus;
 import com.alejandro.bank.customers.domain.Email;
 import com.alejandro.bank.customers.exception.CustomerAlreadyExistsException;
+import com.alejandro.bank.customers.security.CustomerAccessPolicy;
 import com.alejandro.bank.customers.service.CustomerService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -13,6 +14,7 @@ import org.springframework.boot.webflux.test.autoconfigure.WebFluxTest;
 import org.springframework.context.annotation.Import;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
+import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.reactive.server.WebTestClient;
 import reactor.core.publisher.Flux;
@@ -32,7 +34,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 @WebFluxTest(CustomerController.class)
-@Import(SecurityConfig.class)
+@Import({SecurityConfig.class, CustomerAccessPolicy.class})
 class CustomerControllerTest {
 
     private static final String VALID_REQUEST = """
@@ -53,14 +55,22 @@ class CustomerControllerTest {
     @MockitoBean
     CustomerService customerService;
 
+    private static final String ANA_OID = "4f8c2a1e-6b3d-4c9a-9e7f-2d5b8a1c3e01";
+
     // Cliente sin token, para probar el 401
     WebTestClient anonymousClient;
+    // Ana con rol CUSTOMER: su oid es el identityId del cliente abc-123
+    WebTestClient anaClient;
 
-    // Todas las pruebas de la API envían un JWT simulado (sin Keycloak); los roles se prueban en BANK-37
+    // JWT simulado (sin Keycloak). Por defecto el asesor (ADMIN), que puede usar toda la API.
     @BeforeEach
     void authenticate() {
         anonymousClient = webTestClient;
-        webTestClient = webTestClient.mutateWith(mockJwt());
+        anaClient = webTestClient.mutateWith(mockJwt()
+                .jwt(jwt -> jwt.claim("oid", ANA_OID))
+                .authorities(new SimpleGrantedAuthority("ROLE_CUSTOMER")));
+        webTestClient = webTestClient.mutateWith(mockJwt()
+                .authorities(new SimpleGrantedAuthority("ROLE_ADMIN")));
     }
 
     @Test
@@ -294,6 +304,18 @@ class CustomerControllerTest {
                 .documentNumber("12345678")
                 .firstName("Ana María")
                 .status(CustomerStatus.ACTIVE)
+                .identityId(ANA_OID)
+                .build();
+    }
+
+    private Customer luis() {
+        return Customer.builder()
+                .id("def-456")
+                .documentType(DocumentType.DNI)
+                .documentNumber("87654321")
+                .firstName("Luis")
+                .status(CustomerStatus.ACTIVE)
+                .identityId("otro-oid")
                 .build();
     }
 
@@ -373,5 +395,111 @@ class CustomerControllerTest {
                 .expectStatus().isUnauthorized();
 
         verify(customerService, never()).updateContact(any(), any(), any(), any());
+    }
+
+    @Test
+    void customerReadsOwnDataReturns200() {
+        when(customerService.findById("abc-123")).thenReturn(Mono.just(ana()));
+
+        anaClient.get().uri("/customers/abc-123")
+                .exchange()
+                .expectStatus().isOk()
+                .expectBody()
+                .jsonPath("$.id").isEqualTo("abc-123");
+    }
+
+    @Test
+    void customerReadingAnotherCustomerReturns403() {
+        when(customerService.findById("def-456")).thenReturn(Mono.just(luis()));
+
+        anaClient.get().uri("/customers/def-456")
+                .exchange()
+                .expectStatus().isForbidden();
+    }
+
+    // El mismo 403 que con un cliente ajeno: no revela si el id existe
+    @Test
+    void customerReadingUnknownIdReturns403Not404() {
+        when(customerService.findById("no-existe"))
+                .thenReturn(Mono.error(new CustomerNotFoundException("no-existe")));
+
+        anaClient.get().uri("/customers/no-existe")
+                .exchange()
+                .expectStatus().isForbidden()
+                .expectBody().isEmpty();
+    }
+
+    @Test
+    void customerUpdatesOwnContactReturns200() {
+        when(customerService.findById("abc-123")).thenReturn(Mono.just(ana()));
+        when(customerService.updateContact("abc-123", "nuevo@mail.com", null, null)).thenReturn(Mono.just(ana()));
+
+        anaClient.patch().uri("/customers/abc-123")
+                .contentType(MediaType.APPLICATION_JSON)
+                .bodyValue("{\"email\":\"nuevo@mail.com\"}")
+                .exchange()
+                .expectStatus().isOk();
+    }
+
+    @Test
+    void customerUpdatingAnotherCustomerReturns403WithoutUpdating() {
+        when(customerService.findById("def-456")).thenReturn(Mono.just(luis()));
+
+        anaClient.patch().uri("/customers/def-456")
+                .contentType(MediaType.APPLICATION_JSON)
+                .bodyValue("{\"email\":\"nuevo@mail.com\"}")
+                .exchange()
+                .expectStatus().isForbidden();
+
+        verify(customerService, never()).updateContact(any(), any(), any(), any());
+    }
+
+    @Test
+    void customerCannotSearchByDni() {
+        anaClient.get().uri("/customers?dni=87654321")
+                .exchange()
+                .expectStatus().isForbidden();
+
+        verify(customerService, never()).findByDni(any());
+    }
+
+    @Test
+    void customerCannotSearchByName() {
+        anaClient.get().uri("/customers/search?name=quispe")
+                .exchange()
+                .expectStatus().isForbidden();
+
+        verify(customerService, never()).searchByName(any(), anyInt(), anyInt());
+    }
+
+    @Test
+    void customerCannotRegister() {
+        anaClient.post().uri("/customers")
+                .contentType(MediaType.APPLICATION_JSON)
+                .bodyValue(VALID_REQUEST)
+                .exchange()
+                .expectStatus().isForbidden();
+
+        verify(customerService, never()).register(any());
+    }
+
+    @Test
+    void adminReadsAnyCustomer() {
+        when(customerService.findById("def-456")).thenReturn(Mono.just(luis()));
+
+        webTestClient.get().uri("/customers/def-456")
+                .exchange()
+                .expectStatus().isOk()
+                .expectBody()
+                .jsonPath("$.firstName").isEqualTo("Luis");
+    }
+
+    @Test
+    void tokenWithoutRoleReturns403() {
+        anonymousClient.mutateWith(mockJwt()).get().uri("/customers/abc-123")
+                .exchange()
+                .expectStatus().isForbidden();
+
+        verify(customerService, never()).findById(any());
     }
 }
