@@ -1,46 +1,17 @@
 spring:
   application:
+    # Con este nombre pide su configuración al config-server (config-repo/customers-service.yml)
     name: customers-service
+  config:
+    # "optional:" solo para que las pruebas (cliente de config apagado) ignoren este import;
+    # con el cliente encendido, fail-fast hace que el servicio no arranque si el config-server no responde
+    import: optional:configserver:${CONFIG_SERVER_URL:http://localhost:8888}
   cloud:
+    config:
+      fail-fast: true
     azure:
       cosmos:
+        # Credenciales: solo por variables de entorno, nunca en config-repo/ (repositorio público)
         endpoint: ${COSMOS_ENDPOINT}
         key: ${COSMOS_KEY}
         database: bank
-  data:
-    redis:
-      host: ${REDIS_HOST:localhost}
-      port: ${REDIS_PORT:6380}
-      timeout: 200ms
-  security:
-    oauth2:
-      resourceserver:
-        jwt:
-          # Emisor de confianza (iss) y nombre de este servicio (aud). Por defecto, el Keycloak local;
-          # en Azure se definen con las variables apuntando a Microsoft Entra, sin cambiar código.
-          issuer-uri: ${AUTH_ISSUER_URI:http://localhost:8180/realms/bank}
-          audiences: ${AUTH_AUDIENCE:customers-service}
-          # Roles del claim "roles" (CUSTOMER → ROLE_CUSTOMER), igual en Keycloak y en Entra (app roles)
-          authorities-claim-name: roles
-          authority-prefix: ROLE_
-
-springdoc:
-  swagger-ui:
-    oauth:
-      # Cliente público del navegador (bank-web en Keycloak): login con PKCE, sin secreto
-      client-id: ${SWAGGER_CLIENT_ID:bank-web}
-      use-pkce-with-authorization-code-grant: true
-
-server:
-  port: 8081
-
-management:
-  endpoints:
-    web:
-      exposure:
-        include: health,info
-  endpoint:
-    health:
-      show-components: always
-      probes:
-        enabled: true

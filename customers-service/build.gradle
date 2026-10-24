@@ -1,7 +1,6 @@
 plugins {
 	id 'java'
 	id 'org.springframework.boot' version '4.0.8'
-	id 'io.spring.dependency-management' version '1.1.7'
 }
 
 group = 'com.alejandro.bank'
@@ -17,20 +16,22 @@ repositories {
 	mavenCentral()
 }
 
-ext {
-	set('springCloudAzureVersion', "7.3.0")
-	// Parches de seguridad de Jackson (GHSA-7hhh-6rmp-j9qf y otros); quitar al subir a un Boot que ya los traiga
-	set('jackson-bom.version', "3.1.8")
-	set('jackson-2-bom.version', "2.21.8")
-}
-
 dependencies {
+	// Versiones de platform-bom en cada configuración que declara dependencias sin versión
+	def bom = platform('com.alejandro.bank:platform-bom')
+	implementation bom
+	compileOnly bom
+	annotationProcessor bom
+	testCompileOnly bom
+	testAnnotationProcessor bom
+
 	implementation 'org.springframework.boot:spring-boot-starter-actuator'
 	implementation 'org.springframework.boot:spring-boot-starter-validation'
 	implementation 'org.springframework.boot:spring-boot-starter-webflux'
 	implementation 'org.springframework.boot:spring-boot-starter-data-redis-reactive'
 	implementation 'org.springframework.boot:spring-boot-starter-security-oauth2-resource-server'
-	implementation 'org.springdoc:springdoc-openapi-starter-webflux-ui:3.0.3'
+	implementation 'org.springframework.cloud:spring-cloud-starter-config'
+	implementation 'org.springdoc:springdoc-openapi-starter-webflux-ui'
 	implementation 'com.azure.spring:spring-cloud-azure-starter-actuator'
 	implementation 'com.azure.spring:spring-cloud-azure-starter-data-cosmos'
 	compileOnly 'org.projectlombok:lombok'
@@ -46,12 +47,10 @@ dependencies {
 	testAnnotationProcessor 'org.projectlombok:lombok'
 }
 
-dependencyManagement {
-	imports {
-		mavenBom "com.azure.spring:spring-cloud-azure-dependencies:${springCloudAzureVersion}"
-	}
-}
-
 tasks.named('test') {
 	useJUnitPlatform()
+	// Las pruebas no usan el config-server: perfil "test" (lee config-repo/ directo) y cliente de config
+	// apagado desde el arranque (en application-test.yaml llegaría tarde: el import se procesa antes)
+	systemProperty 'spring.profiles.active', 'test'
+	systemProperty 'spring.cloud.config.enabled', 'false'
 }
