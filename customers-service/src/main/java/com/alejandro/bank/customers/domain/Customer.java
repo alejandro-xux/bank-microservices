@@ -39,6 +39,9 @@ public class Customer {
     private List<Email> emails;
     private List<Phone> phones;
 
+    // Id del usuario en el proveedor de identidad (claim oid de Entra o de Keycloak): vincula la cuenta con el cliente.
+    private String identityId;
+
     private CustomerStatus status;
     private Instant createdAt;
     private Instant updatedAt;
