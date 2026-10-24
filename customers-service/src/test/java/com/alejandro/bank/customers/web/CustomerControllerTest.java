@@ -55,6 +55,10 @@ class CustomerControllerTest {
     @MockitoBean
     CustomerService customerService;
 
+    // 403 genérico: el mismo para rol insuficiente, cliente ajeno o id inexistente
+    private static final String FORBIDDEN_TITLE = "Acceso denegado";
+    private static final String FORBIDDEN_DETAIL = "No tiene permiso para acceder a este recurso";
+
     private static final String ANA_OID = "4f8c2a1e-6b3d-4c9a-9e7f-2d5b8a1c3e01";
 
     // Cliente sin token, para probar el 401
@@ -381,7 +385,13 @@ class CustomerControllerTest {
         anonymousClient.get().uri("/customers/abc-123")
                 .exchange()
                 .expectStatus().isUnauthorized()
-                .expectHeader().valueMatches(HttpHeaders.WWW_AUTHENTICATE, "Bearer.*");
+                .expectHeader().valueMatches(HttpHeaders.WWW_AUTHENTICATE, "Bearer.*")
+                .expectHeader().contentType(MediaType.APPLICATION_PROBLEM_JSON)
+                .expectBody()
+                .jsonPath("$.title").isEqualTo("No autenticado")
+                .jsonPath("$.detail").isEqualTo("Falta el token o no es válido")
+                .jsonPath("$.status").isEqualTo(401)
+                .jsonPath("$.instance").isEqualTo("/customers/abc-123");
 
         verify(customerService, never()).findById(any());
     }
@@ -414,7 +424,13 @@ class CustomerControllerTest {
 
         anaClient.get().uri("/customers/def-456")
                 .exchange()
-                .expectStatus().isForbidden();
+                .expectStatus().isForbidden()
+                .expectHeader().contentType(MediaType.APPLICATION_PROBLEM_JSON)
+                .expectBody()
+                .jsonPath("$.title").isEqualTo(FORBIDDEN_TITLE)
+                .jsonPath("$.detail").isEqualTo(FORBIDDEN_DETAIL)
+                .jsonPath("$.status").isEqualTo(403)
+                .jsonPath("$.instance").isEqualTo("/customers/def-456");
     }
 
     // El mismo 403 que con un cliente ajeno: no revela si el id existe
@@ -426,7 +442,11 @@ class CustomerControllerTest {
         anaClient.get().uri("/customers/no-existe")
                 .exchange()
                 .expectStatus().isForbidden()
-                .expectBody().isEmpty();
+                .expectHeader().contentType(MediaType.APPLICATION_PROBLEM_JSON)
+                .expectBody()
+                .jsonPath("$.title").isEqualTo(FORBIDDEN_TITLE)
+                .jsonPath("$.detail").isEqualTo(FORBIDDEN_DETAIL)
+                .jsonPath("$.status").isEqualTo(403);
     }
 
     @Test
@@ -467,7 +487,10 @@ class CustomerControllerTest {
     void customerCannotSearchByName() {
         anaClient.get().uri("/customers/search?name=quispe")
                 .exchange()
-                .expectStatus().isForbidden();
+                .expectStatus().isForbidden()
+                .expectHeader().contentType(MediaType.APPLICATION_PROBLEM_JSON)
+                .expectBody()
+                .jsonPath("$.title").isEqualTo(FORBIDDEN_TITLE);
 
         verify(customerService, never()).searchByName(any(), anyInt(), anyInt());
     }

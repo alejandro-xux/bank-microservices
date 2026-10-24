@@ -68,6 +68,10 @@ Los permisos salen del claim `roles` del token; si el rol no alcanza, la respues
 
 Un `CUSTOMER` que pide otro cliente o un id que no existe recibe el mismo 403, para no revelar qué clientes existen.
 
+Los 401 y 403 responden en formato ProblemDetail (`application/problem+json`), igual que el resto de errores; el 401 mantiene el header estándar `WWW-Authenticate`.
+
+**Probar desde Swagger** (http://localhost:8081/swagger-ui.html): botón **Authorize** → bloque *authorization_code with PKCE* (cliente `bank-web`, sin secreto) → **Authorize** → iniciar sesión en Keycloak como `ana` o `asesor`. Desde ahí, *Try it out* envía el token en cada llamada. En Azure se usa el mismo botón con Entra, definiendo `AUTH_ISSUER_URI` y `SWAGGER_CLIENT_ID`.
+
 ## Gestión
 - Jira: proyecto `BANK`
 - Ramas: `feature/BANK-<n>-<descripcion>`

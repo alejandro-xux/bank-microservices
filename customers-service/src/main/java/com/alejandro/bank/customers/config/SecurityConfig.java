@@ -1,6 +1,7 @@
 package com.alejandro.bank.customers.config;
 
 import org.springframework.context.annotation.Bean;
+import com.alejandro.bank.customers.security.ProblemDetailSecurityHandlers;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.http.HttpMethod;
 import org.springframework.security.config.Customizer;
@@ -8,6 +9,7 @@ import org.springframework.security.config.annotation.web.reactive.EnableWebFlux
 import org.springframework.security.config.web.server.ServerHttpSecurity;
 import org.springframework.security.web.server.SecurityWebFilterChain;
 import org.springframework.security.web.server.context.NoOpServerSecurityContextRepository;
+import tools.jackson.databind.json.JsonMapper;
 
 @Configuration
 @EnableWebFluxSecurity
@@ -28,7 +30,8 @@ public class SecurityConfig {
 
     // API stateless: cada petición trae su JWT (Bearer), sin sesión ni cookies, por eso CSRF no aplica
     @Bean
-    public SecurityWebFilterChain securityWebFilterChain(ServerHttpSecurity http) {
+    public SecurityWebFilterChain securityWebFilterChain(ServerHttpSecurity http, JsonMapper jsonMapper) {
+        ProblemDetailSecurityHandlers handlers = new ProblemDetailSecurityHandlers(jsonMapper);
         return http
                 .csrf(ServerHttpSecurity.CsrfSpec::disable)
                 .securityContextRepository(NoOpServerSecurityContextRepository.getInstance())
@@ -42,7 +45,15 @@ public class SecurityConfig {
                         // /customers/{id}: asesor o cliente; que sea el dueño lo revisa CustomerAccessPolicy
                         .pathMatchers("/customers/**").hasAnyRole(ADMIN, CUSTOMER)
                         .anyExchange().authenticated())
-                .oauth2ResourceServer(oauth2 -> oauth2.jwt(Customizer.withDefaults()))
+                // 401 y 403 con cuerpo ProblemDetail: sin token y accesos denegados (rol, dueño, /me)...
+                .exceptionHandling(exceptions -> exceptions
+                        .authenticationEntryPoint(handlers.authenticationEntryPoint())
+                        .accessDeniedHandler(handlers.accessDeniedHandler()))
+                // ...y token inválido, vencido o de otra audiencia
+                .oauth2ResourceServer(oauth2 -> oauth2
+                        .jwt(Customizer.withDefaults())
+                        .authenticationEntryPoint(handlers.authenticationEntryPoint())
+                        .accessDeniedHandler(handlers.accessDeniedHandler()))
                 .build();
     }
 }
