@@ -15,6 +15,10 @@ spring:
     gateway:
       server:
         webflux:
+          # No esperar para siempre: conectar en 1 s (servicio apagado) y responder en 3 s (servicio lento)
+          httpclient:
+            connect-timeout: 1000
+            response-timeout: 3s
           routes:
             # /api/customers/** → customers-service (dirección resuelta en Eureka), sin el prefijo /api.
             # El header Authorization se reenvía tal cual: el servicio vuelve a validar el token.
@@ -32,13 +36,42 @@ spring:
                     redis-rate-limiter.replenishRate: ${RATE_LIMIT_REPLENISH:10}
                     redis-rate-limiter.burstCapacity: ${RATE_LIMIT_BURST:20}
                     key-resolver: "#{@userKeyResolver}"
+                # Circuit breaker (BANK-47): caído, lento o 5xx → plan B 503 en ProblemDetail; los 4xx no cuentan
+                - name: CircuitBreaker
+                  args:
+                    name: customers
+                    fallbackUri: forward:/fallback/service-unavailable
+                    statusCodes: 500,502,503,504
+
+# Reglas del circuito "customers": se mira una ventana de las últimas 10 llamadas (mínimo 5 para decidir);
+# con 50 % de fallos se ABRE 10 s y luego deja pasar 3 de prueba (SEMIABIERTO).
+resilience4j:
+  circuitbreaker:
+    instances:
+      customers:
+        sliding-window-size: 10
+        minimum-number-of-calls: 5
+        failure-rate-threshold: 50
+        wait-duration-in-open-state: 10s
+        permitted-number-of-calls-in-half-open-state: 3
+        automatic-transition-from-open-to-half-open-enabled: true
+        register-health-indicator: true
+  # El time limiter de Resilience4j trae 1 s por defecto: se alinea con el response-timeout (3 s)
+  timelimiter:
+    instances:
+      customers:
+        timeout-duration: 3s
 
 management:
   endpoints:
     web:
       exposure:
-        include: health,info
+        # circuitbreakers: estado de cada circuito (pide token, como todo salvo el health)
+        include: health,info,circuitbreakers
   endpoint:
     health:
       probes:
         enabled: true
+  health:
+    circuitbreakers:
+      enabled: true

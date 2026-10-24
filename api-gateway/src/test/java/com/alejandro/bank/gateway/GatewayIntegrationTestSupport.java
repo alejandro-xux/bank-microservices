@@ -24,6 +24,7 @@ import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.util.List;
 import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.concurrent.Executors;
 
 // Base de las pruebas del gateway: un Keycloak real compartido por todas las clases (arranca una sola vez)
 // y un customers-service simulado que anota cada petición que le llega. Cada clase trae su propio Redis.
@@ -94,6 +95,8 @@ abstract class GatewayIntegrationTestSupport {
         return "http://" + KEYCLOAK.getHost() + ":" + KEYCLOAK.getMappedPort(8080) + "/realms/bank";
     }
 
+    static final Duration SLOW_RESPONSE = Duration.ofSeconds(2);
+
     // customers-service simulado: anota lo que recibe y responde según el id pedido
     private static HttpServer startFakeCustomersService() {
         try {
@@ -104,7 +107,17 @@ abstract class GatewayIntegrationTestSupport {
                 int status;
                 String contentType;
                 String body;
-                if (path.endsWith("/def-456")) {
+                if (path.endsWith("/lento")) {
+                    // Servicio lento: tarda más que el timeout del gateway en las pruebas
+                    sleep(SLOW_RESPONSE);
+                    status = 200;
+                    contentType = "application/json";
+                    body = "{\"id\":\"lento\"}";
+                } else if (path.endsWith("/error")) {
+                    status = 500;
+                    contentType = "application/problem+json";
+                    body = "{\"title\":\"Error interno\",\"status\":500}";
+                } else if (path.endsWith("/def-456")) {
                     status = 403;
                     contentType = "application/problem+json";
                     body = "{\"title\":\"Acceso denegado\",\"status\":403}";
@@ -123,10 +136,20 @@ abstract class GatewayIntegrationTestSupport {
                 exchange.getResponseBody().write(bytes);
                 exchange.close();
             });
+            // Varios hilos: una respuesta lenta no bloquea a las demás
+            server.setExecutor(Executors.newCachedThreadPool());
             server.start();
             return server;
         } catch (IOException e) {
             throw new UncheckedIOException(e);
+        }
+    }
+
+    private static void sleep(Duration duration) {
+        try {
+            Thread.sleep(duration);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
         }
     }
 }
