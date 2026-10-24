@@ -26,6 +26,8 @@ dependencies {
 	implementation 'org.springframework.boot:spring-boot-starter-security-oauth2-resource-server'
 	// Rate limiting: los baldes de fichas de cada usuario viven en Redis (compartidos entre copias del gateway)
 	implementation 'org.springframework.boot:spring-boot-starter-data-redis-reactive'
+	// Circuit breaker y time limiter (Resilience4j) para las rutas hacia los servicios
+	implementation 'org.springframework.cloud:spring-cloud-starter-circuitbreaker-reactor-resilience4j'
 	implementation 'org.springframework.boot:spring-boot-starter-actuator'
 	testImplementation 'org.springframework.boot:spring-boot-starter-test'
 	testImplementation 'org.testcontainers:testcontainers-junit-jupiter'

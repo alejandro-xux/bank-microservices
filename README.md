@@ -120,6 +120,7 @@ curl -H "Authorization: Bearer $TOKEN" http://localhost:8080/api/customers/me
 - Las rutas están en `config-repo/api-gateway.yml`. `CUSTOMERS_SERVICE_URI` apunta la ruta a una URL fija en lugar de Eureka.
 - Al arrancar, el gateway tarda hasta ~30 s en tener la lista de Eureka; mientras tanto la ruta puede responder 503.
 - **Rate limiting por usuario** (claim `oid`): balde de fichas en Redis (el mismo `bank-redis`), 10 por segundo con ráfaga de 20 (`RATE_LIMIT_REPLENISH` y `RATE_LIMIT_BURST`). Al agotarlo responde **429** en ProblemDetail con los headers `X-RateLimit-*`. Un usuario a ritmo normal no llega al límite; un script con muchas peticiones simultáneas sí. Si Redis no responde, el gateway deja pasar las peticiones (falla abierta) y lo registra en el log.
+- **Timeouts y circuit breaker** (Resilience4j): conecta en 1 s y espera la respuesta 3 s. Si el servicio está caído, lento o responde 5xx, el gateway devuelve **503** en ProblemDetail sin detalles internos. Con 50 % de fallos en las últimas 10 llamadas (mínimo 5) el circuito se **abre**: durante 10 s responde 503 al instante sin llamar al servicio, y luego prueba con 3 llamadas antes de cerrarse. Los 4xx (403, 404…) no cuentan como fallo. Estado: `curl -H "Authorization: Bearer $TOKEN" http://localhost:8080/actuator/circuitbreakers`. Recién arrancado el gateway, mientras aún no tiene la lista de Eureka, el circuito puede abrirse unos segundos; se cierra solo.
 
 Orden de arranque: Docker → config-server → discovery-server → customers-service → api-gateway.
 
