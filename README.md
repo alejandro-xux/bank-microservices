@@ -72,6 +72,13 @@ Los 401 y 403 responden en formato ProblemDetail (`application/problem+json`), i
 
 **Probar desde Swagger** (http://localhost:8081/swagger-ui.html): botón **Authorize** → bloque *authorization_code with PKCE* (cliente `bank-web`, sin secreto) → **Authorize** → iniciar sesión en Keycloak como `ana` o `asesor`. Desde ahí, *Try it out* envía el token en cada llamada. En Azure se usa el mismo botón con Entra, definiendo `AUTH_ISSUER_URI` y `SWAGGER_CLIENT_ID`.
 
+### Pruebas
+```bash
+cd customers-service
+./gradlew test
+```
+No necesitan credenciales de Azure (Cosmos está simulado), pero sí Docker encendido: Testcontainers levanta Redis para las pruebas de cache y un Keycloak con `infra/keycloak/bank-realm.json` para probar la seguridad con tokens reales (firma, `iss`, `aud`, roles y `oid`).
+
 ## Gestión
 - Jira: proyecto `BANK`
 - Ramas: `feature/BANK-<n>-<descripcion>`
