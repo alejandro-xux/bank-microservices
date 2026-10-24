@@ -58,6 +58,15 @@ La API exige un token (`Authorization: Bearer …`); sin él, o con uno inválid
 curl -H "Authorization: Bearer $TOKEN" http://localhost:8081/customers/c15a442d-5146-471e-8804-746f4b42253b
 ```
 
+Los permisos salen del claim `roles` del token; si el rol no alcanza, la respuesta es 403:
+
+| Endpoint | `ADMIN` | `CUSTOMER` |
+|---|---|---|
+| `POST /customers`, `GET /customers?dni=`, `GET /customers/search` | ✅ | 403 |
+| `GET` y `PATCH /customers/{id}` | ✅ cualquiera (404 si no existe) | solo el suyo (`identityId` = su `oid`) |
+
+Un `CUSTOMER` que pide otro cliente o un id que no existe recibe el mismo 403, para no revelar qué clientes existen.
+
 ## Gestión
 - Jira: proyecto `BANK`
 - Ramas: `feature/BANK-<n>-<descripcion>`
