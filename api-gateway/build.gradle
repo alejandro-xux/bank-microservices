@@ -1,0 +1,39 @@
+plugins {
+	id 'java'
+	id 'org.springframework.boot' version '4.0.8'
+}
+
+group = 'com.alejandro.bank'
+version = '0.0.1-SNAPSHOT'
+
+java {
+	toolchain {
+		languageVersion = JavaLanguageVersion.of(21)
+	}
+}
+
+repositories {
+	mavenCentral()
+}
+
+dependencies {
+	// Versiones de platform-bom
+	implementation platform('com.alejandro.bank:platform-bom')
+
+	implementation 'org.springframework.cloud:spring-cloud-starter-gateway-server-webflux'
+	implementation 'org.springframework.cloud:spring-cloud-starter-netflix-eureka-client'
+	implementation 'org.springframework.cloud:spring-cloud-starter-config'
+	implementation 'org.springframework.boot:spring-boot-starter-security-oauth2-resource-server'
+	implementation 'org.springframework.boot:spring-boot-starter-actuator'
+	testImplementation 'org.springframework.boot:spring-boot-starter-test'
+	testImplementation 'org.testcontainers:testcontainers-junit-jupiter'
+	testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
+}
+
+tasks.named('test') {
+	useJUnitPlatform()
+	// Las pruebas no usan el config-server: perfil "test" (lee config-repo/ directo) y cliente de config
+	// apagado desde el arranque (en application-test.yaml llegaría tarde: el import se procesa antes)
+	systemProperty 'spring.profiles.active', 'test'
+	systemProperty 'spring.cloud.config.enabled', 'false'
+}

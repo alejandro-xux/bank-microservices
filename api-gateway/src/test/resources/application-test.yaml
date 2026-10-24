@@ -1,0 +1,11 @@
+spring:
+  # Las pruebas no usan el config-server: leen los mismos archivos de config-repo/ directamente
+  config:
+    import:
+      - file:../config-repo/application.yml
+      - file:../config-repo/api-gateway.yml
+
+# Las pruebas no se registran en Eureka; la ruta apunta a un customers-service simulado (ver la prueba)
+eureka:
+  client:
+    enabled: false

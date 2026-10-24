@@ -8,6 +8,7 @@ programación reactiva, Kafka, Azure y Quarkus.
 |---|---|
 | config-server | Spring Cloud Config (backend native sobre `config-repo/`) |
 | discovery-server | Spring Cloud Netflix Eureka (registro de servicios) |
+| api-gateway | Spring Cloud Gateway Server WebFlux (punto de entrada único, valida el JWT) |
 | customers-service | Spring WebFlux + Cosmos DB + Redis (cache) |
 | accounts-service | Spring MVC + JPA + PostgreSQL |
 | notifications-service | Spring Kafka + Resilience4j |
@@ -105,13 +106,30 @@ Los 401 y 403 responden en formato ProblemDetail (`application/problem+json`), i
 
 **Probar desde Swagger** (http://localhost:8081/swagger-ui.html): botón **Authorize** → bloque *authorization_code with PKCE* (cliente `bank-web`, sin secreto) → **Authorize** → iniciar sesión en Keycloak como `ana` o `asesor`. Desde ahí, *Try it out* envía el token en cada llamada. En Azure se usa el mismo botón con Entra, definiendo `AUTH_ISSUER_URI` y `SWAGGER_CLIENT_ID`.
 
+### api-gateway (punto de entrada)
+La API se usa por el **puerto 8080** con el prefijo `/api`: `GET http://localhost:8080/api/customers/me` llega a customers-service como `GET /customers/me`. Necesita el config-server; encuentra a customers-service por su nombre en Eureka.
+
+```bash
+cd api-gateway
+./gradlew bootRun
+curl -H "Authorization: Bearer $TOKEN" http://localhost:8080/api/customers/me
+```
+
+- El gateway valida el token en el borde: sin token o con uno inválido responde 401 sin llamar al servicio.
+- No revisa roles. Roles y dueño los decide customers-service, que además vuelve a validar el token (zero trust); sus 403 y 404 llegan tal cual.
+- Las rutas están en `config-repo/api-gateway.yml`. `CUSTOMERS_SERVICE_URI` apunta la ruta a una URL fija en lugar de Eureka.
+- Al arrancar, el gateway tarda hasta ~30 s en tener la lista de Eureka; mientras tanto la ruta puede responder 503.
+
+Orden de arranque: Docker → config-server → discovery-server → customers-service → api-gateway.
+
 ### Pruebas
 ```bash
 cd customers-service && ./gradlew test
 cd config-server && ./gradlew test
 cd discovery-server && ./gradlew test
+cd api-gateway && ./gradlew test
 ```
-No necesitan el config-server ni Eureka encendidos (las de customers-service leen `config-repo/` directamente y no se registran) ni credenciales de Azure (Cosmos está simulado), pero sí Docker encendido: Testcontainers levanta Redis para las pruebas de cache y un Keycloak con `infra/keycloak/bank-realm.json` para probar la seguridad con tokens reales (firma, `iss`, `aud`, roles y `oid`).
+No necesitan el config-server ni Eureka encendidos (las de customers-service leen `config-repo/` directamente y no se registran) ni credenciales de Azure (Cosmos está simulado), pero sí Docker encendido: Testcontainers levanta Redis para las pruebas de cache y un Keycloak con `infra/keycloak/bank-realm.json` para probar la seguridad con tokens reales (firma, `iss`, `aud`, roles y `oid`), tanto en customers-service como en el api-gateway (este último frente a un customers-service simulado).
 
 ## Gestión
 - Jira: proyecto `BANK`

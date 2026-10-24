@@ -1,0 +1,11 @@
+spring:
+  application:
+    # Con este nombre pide su configuración al config-server (config-repo/api-gateway.yml)
+    name: api-gateway
+  config:
+    # "optional:" solo para que las pruebas (cliente de config apagado) ignoren este import;
+    # con el cliente encendido, fail-fast hace que el gateway no arranque si el config-server no responde
+    import: optional:configserver:${CONFIG_SERVER_URL:http://localhost:8888}
+  cloud:
+    config:
+      fail-fast: true
