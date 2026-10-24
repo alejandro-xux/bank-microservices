@@ -12,6 +12,14 @@ spring:
       host: ${REDIS_HOST:localhost}
       port: ${REDIS_PORT:6380}
       timeout: 200ms
+  security:
+    oauth2:
+      resourceserver:
+        jwt:
+          # Emisor de confianza (iss) y nombre de este servicio (aud). Por defecto, el Keycloak local;
+          # en Azure se definen con las variables apuntando a Microsoft Entra, sin cambiar código.
+          issuer-uri: ${AUTH_ISSUER_URI:http://localhost:8180/realms/bank}
+          audiences: ${AUTH_AUDIENCE:customers-service}
 
 server:
   port: 8081

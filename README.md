@@ -44,11 +44,18 @@ echo "$TOKEN" | cut -d. -f2 | python3 -c "import sys,json,base64; p=sys.stdin.re
 
 El token dura 5 minutos. El vínculo cuenta ↔ cliente es el campo `identityId` del documento del cliente en Cosmos, que debe ser igual al `oid` del usuario. En local se agrega a mano en Azure Portal → Cosmos DB → Data Explorer → `bank` / `customers`: abrir el documento de Ana (DNI 12345678), añadir `"identityId": "4f8c2a1e-6b3d-4c9a-9e7f-2d5b8a1c3e01"` y guardar.
 
-customers-service necesita las variables `COSMOS_ENDPOINT` y `COSMOS_KEY`; `REDIS_HOST` y `REDIS_PORT` son opcionales (por defecto `localhost:6380`).
+### customers-service
+Necesita las variables `COSMOS_ENDPOINT` y `COSMOS_KEY`. Son opcionales `REDIS_HOST` y `REDIS_PORT` (por defecto `localhost:6380`) y `AUTH_ISSUER_URI` y `AUTH_AUDIENCE` (por defecto el Keycloak local: `http://localhost:8180/realms/bank` y `customers-service`; en Azure apuntan a Microsoft Entra).
 
 ```bash
 cd customers-service
 ./gradlew bootRun
+```
+
+La API exige un token (`Authorization: Bearer …`); sin él, o con uno inválido, vencido o de otra audiencia, responde 401. Solo `/actuator/health/**` y la documentación (`/v3/api-docs`, Swagger UI) son públicos. Con el `TOKEN` obtenido arriba:
+
+```bash
+curl -H "Authorization: Bearer $TOKEN" http://localhost:8081/customers/c15a442d-5146-471e-8804-746f4b42253b
 ```
 
 ## Gestión

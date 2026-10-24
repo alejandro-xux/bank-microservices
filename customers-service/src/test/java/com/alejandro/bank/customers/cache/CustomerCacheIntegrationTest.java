@@ -32,6 +32,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import static org.springframework.security.test.web.reactive.server.SecurityMockServerConfigurers.mockJwt;
 
 // Cache Aside contra un Redis real en Docker (Testcontainers). Cosmos sigue simulado: no necesita credenciales.
 @SpringBootTest
@@ -57,8 +58,9 @@ class CustomerCacheIntegrationTest {
     CustomerRepository customerRepository;
 
     @BeforeEach
-    void cleanRedis() {
+    void cleanRedisAndAuthenticate() {
         redisTemplate.delete(KEY).block();
+        webTestClient = webTestClient.mutateWith(mockJwt());
     }
 
     @Test
