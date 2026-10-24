@@ -1,13 +1,17 @@
 package com.alejandro.bank.customers.web;
 
+import com.alejandro.bank.customers.config.SecurityConfig;
 import com.alejandro.bank.customers.domain.Customer;
 import com.alejandro.bank.customers.domain.CustomerStatus;
 import com.alejandro.bank.customers.domain.Email;
 import com.alejandro.bank.customers.exception.CustomerAlreadyExistsException;
 import com.alejandro.bank.customers.service.CustomerService;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.webflux.test.autoconfigure.WebFluxTest;
+import org.springframework.context.annotation.Import;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.reactive.server.WebTestClient;
@@ -22,11 +26,13 @@ import java.time.Instant;
 import java.util.List;
 
 import static org.mockito.ArgumentMatchers.*;
+import static org.springframework.security.test.web.reactive.server.SecurityMockServerConfigurers.mockJwt;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 @WebFluxTest(CustomerController.class)
+@Import(SecurityConfig.class)
 class CustomerControllerTest {
 
     private static final String VALID_REQUEST = """
@@ -46,6 +52,16 @@ class CustomerControllerTest {
 
     @MockitoBean
     CustomerService customerService;
+
+    // Cliente sin token, para probar el 401
+    WebTestClient anonymousClient;
+
+    // Todas las pruebas de la API envían un JWT simulado (sin Keycloak); los roles se prueban en BANK-37
+    @BeforeEach
+    void authenticate() {
+        anonymousClient = webTestClient;
+        webTestClient = webTestClient.mutateWith(mockJwt());
+    }
 
     @Test
     void registerReturns201WithLocation() {
@@ -336,5 +352,26 @@ class CustomerControllerTest {
                 .bodyValue("{\"email\":\"nuevo@mail.com\"}")
                 .exchange()
                 .expectStatus().isNotFound();
+    }
+
+    @Test
+    void getWithoutTokenReturns401() {
+        anonymousClient.get().uri("/customers/abc-123")
+                .exchange()
+                .expectStatus().isUnauthorized()
+                .expectHeader().valueMatches(HttpHeaders.WWW_AUTHENTICATE, "Bearer.*");
+
+        verify(customerService, never()).findById(any());
+    }
+
+    @Test
+    void patchWithoutTokenReturns401NotCsrf403() {
+        anonymousClient.patch().uri("/customers/abc-123")
+                .contentType(MediaType.APPLICATION_JSON)
+                .bodyValue("{\"email\":\"nuevo@mail.com\"}")
+                .exchange()
+                .expectStatus().isUnauthorized();
+
+        verify(customerService, never()).updateContact(any(), any(), any(), any());
     }
 }

@@ -1,10 +1,12 @@
 package com.alejandro.bank.customers.web;
 
+import com.alejandro.bank.customers.config.SecurityConfig;
 import com.alejandro.bank.customers.exception.CustomerAlreadyExistsException;
 import com.alejandro.bank.customers.exception.CustomerNotFoundException;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.NotBlank;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.webflux.test.autoconfigure.WebFluxTest;
@@ -17,12 +19,19 @@ import org.springframework.web.bind.annotation.RestController;
 import reactor.core.publisher.Mono;
 import org.springframework.context.annotation.Import;
 
+import static org.springframework.security.test.web.reactive.server.SecurityMockServerConfigurers.mockJwt;
+
 @WebFluxTest(controllers = GlobalExceptionHandlerTest.FakeController.class)
-@Import(GlobalExceptionHandlerTest.FakeController.class)
+@Import({GlobalExceptionHandlerTest.FakeController.class, SecurityConfig.class})
 class GlobalExceptionHandlerTest {
 
     @Autowired
     WebTestClient webTestClient;
+
+    @BeforeEach
+    void authenticate() {
+        webTestClient = webTestClient.mutateWith(mockJwt());
+    }
 
     @Test
     void validationErrorReturns400WithEachField() {
