@@ -1,0 +1,23 @@
+# Independiente del config-server: es infraestructura base y debe poder arrancar sola (BANK-44)
+spring:
+  application:
+    name: discovery-server
+
+server:
+  port: 8761
+
+eureka:
+  client:
+    # Es el servidor: no se registra en sí mismo ni descarga el registro
+    register-with-eureka: false
+    fetch-registry: false
+  server:
+    # Solo local: si un servicio deja de latir se borra enseguida. En producción va encendido
+    # (si muchos dejan de latir a la vez, asume una falla de red y no borra a nadie).
+    enable-self-preservation: false
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info

@@ -7,6 +7,7 @@ programación reactiva, Kafka, Azure y Quarkus.
 | Servicio | Stack |
 |---|---|
 | config-server | Spring Cloud Config (backend native sobre `config-repo/`) |
+| discovery-server | Spring Cloud Netflix Eureka (registro de servicios) |
 | customers-service | Spring WebFlux + Cosmos DB + Redis (cache) |
 | accounts-service | Spring MVC + JPA + PostgreSQL |
 | notifications-service | Spring Kafka + Resilience4j |
@@ -60,8 +61,22 @@ curl http://localhost:8888/customers-service/default   # la configuración que r
 
 Lee `config-repo/` (otra carpeta con `CONFIG_REPO`). Un cambio en `config-repo/` se aplica reiniciando el servicio que lo usa.
 
+### discovery-server (Eureka)
+Registro de servicios en el puerto 8761: cada servicio se anota con su nombre (`spring.application.name`) y los demás lo buscan por ese nombre. Es independiente del config-server y conviene levantarlo antes que los servicios:
+
+```bash
+cd discovery-server
+./gradlew bootRun
+```
+
+- Panel: http://localhost:8761 (ahí aparece `CUSTOMERS-SERVICE` en `UP`).
+- API: `curl -H "Accept: application/json" http://localhost:8761/eureka/apps`. El registro tarda hasta 30 s en verse en la API (caché de Eureka).
+- Si Eureka no está, los servicios arrancan igual y se registran solos cuando vuelve.
+- La autopreservación está apagada solo en local, para que un servicio detenido desaparezca enseguida; en producción va encendida.
+- En AKS (E12) Eureka se reemplaza por Services y DNS de Kubernetes.
+
 ### customers-service
-Necesita el config-server arriba y las variables `COSMOS_ENDPOINT` y `COSMOS_KEY`. Son opcionales `CONFIG_SERVER_URL` (por defecto `http://localhost:8888`), `REDIS_HOST` y `REDIS_PORT` (por defecto `localhost:6380`) y `AUTH_ISSUER_URI` y `AUTH_AUDIENCE` (por defecto el Keycloak local: `http://localhost:8180/realms/bank` y `customers-service`; en Azure apuntan a Microsoft Entra).
+Necesita el config-server arriba y las variables `COSMOS_ENDPOINT` y `COSMOS_KEY`. Son opcionales `CONFIG_SERVER_URL` (por defecto `http://localhost:8888`), `EUREKA_URL` (por defecto `http://localhost:8761/eureka`), `REDIS_HOST` y `REDIS_PORT` (por defecto `localhost:6380`) y `AUTH_ISSUER_URI` y `AUTH_AUDIENCE` (por defecto el Keycloak local: `http://localhost:8180/realms/bank` y `customers-service`; en Azure apuntan a Microsoft Entra).
 
 ```bash
 cd customers-service
@@ -94,8 +109,9 @@ Los 401 y 403 responden en formato ProblemDetail (`application/problem+json`), i
 ```bash
 cd customers-service && ./gradlew test
 cd config-server && ./gradlew test
+cd discovery-server && ./gradlew test
 ```
-No necesitan el config-server encendido (las de customers-service leen `config-repo/` directamente) ni credenciales de Azure (Cosmos está simulado), pero sí Docker encendido: Testcontainers levanta Redis para las pruebas de cache y un Keycloak con `infra/keycloak/bank-realm.json` para probar la seguridad con tokens reales (firma, `iss`, `aud`, roles y `oid`).
+No necesitan el config-server ni Eureka encendidos (las de customers-service leen `config-repo/` directamente y no se registran) ni credenciales de Azure (Cosmos está simulado), pero sí Docker encendido: Testcontainers levanta Redis para las pruebas de cache y un Keycloak con `infra/keycloak/bank-realm.json` para probar la seguridad con tokens reales (firma, `iss`, `aud`, roles y `oid`).
 
 ## Gestión
 - Jira: proyecto `BANK`
