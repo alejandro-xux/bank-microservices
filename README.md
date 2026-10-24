@@ -119,6 +119,7 @@ curl -H "Authorization: Bearer $TOKEN" http://localhost:8080/api/customers/me
 - No revisa roles. Roles y dueño los decide customers-service, que además vuelve a validar el token (zero trust); sus 403 y 404 llegan tal cual.
 - Las rutas están en `config-repo/api-gateway.yml`. `CUSTOMERS_SERVICE_URI` apunta la ruta a una URL fija en lugar de Eureka.
 - Al arrancar, el gateway tarda hasta ~30 s en tener la lista de Eureka; mientras tanto la ruta puede responder 503.
+- **Rate limiting por usuario** (claim `oid`): balde de fichas en Redis (el mismo `bank-redis`), 10 por segundo con ráfaga de 20 (`RATE_LIMIT_REPLENISH` y `RATE_LIMIT_BURST`). Al agotarlo responde **429** en ProblemDetail con los headers `X-RateLimit-*`. Un usuario a ritmo normal no llega al límite; un script con muchas peticiones simultáneas sí. Si Redis no responde, el gateway deja pasar las peticiones (falla abierta) y lo registra en el log.
 
 Orden de arranque: Docker → config-server → discovery-server → customers-service → api-gateway.
 

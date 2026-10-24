@@ -4,6 +4,13 @@ server:
   port: 8080
 
 spring:
+  # Mismo Redis que el cache de customers-service (claves request_rate_limiter.* frente a customers:v2:*).
+  # Timeout corto: si Redis cae, el limitador deja pasar enseguida (falla abierta) en lugar de colgar la petición.
+  data:
+    redis:
+      host: ${REDIS_HOST:localhost}
+      port: ${REDIS_PORT:6380}
+      timeout: 200ms
   cloud:
     gateway:
       server:
@@ -18,6 +25,13 @@ spring:
                 - Path=/api/customers/**
               filters:
                 - StripPrefix=1
+                # Límite por usuario (balde de fichas en Redis): se recargan "replenishRate" fichas por segundo,
+                # con capacidad para una ráfaga de "burstCapacity". Al agotarlas → 429 (BANK-46).
+                - name: RequestRateLimiter
+                  args:
+                    redis-rate-limiter.replenishRate: ${RATE_LIMIT_REPLENISH:10}
+                    redis-rate-limiter.burstCapacity: ${RATE_LIMIT_BURST:20}
+                    key-resolver: "#{@userKeyResolver}"
 
 management:
   endpoints:
