@@ -22,7 +22,8 @@ import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.reset;
 
 // Si algo falla a mitad de la transferencia (aquí, al guardar el primer movimiento), no queda nada:
-// ni el débito, ni el crédito, ni el registro transfer; y la clave sigue libre para reintentar
+// ni el débito, ni el crédito, ni el registro transfer, ni su evento en el outbox (BANK-69); y la clave
+// sigue libre para reintentar
 class TransferRollbackIntegrationTest extends PostgresIntegrationTest {
 
     @MockitoSpyBean
@@ -36,6 +37,7 @@ class TransferRollbackIntegrationTest extends PostgresIntegrationTest {
 
     @Test
     void aFailureHalfwayRollsBackEverything() {
+        jdbc.update("delete from outbox");
         jdbc.update("delete from movement");
         jdbc.update("delete from transfer");
         jdbc.update("delete from account");
@@ -52,12 +54,14 @@ class TransferRollbackIntegrationTest extends PostgresIntegrationTest {
         assertThat(balance(from)).isEqualTo("1000.00");
         assertThat(balance(to)).isEqualTo("1000.00");
         assertThat(jdbc.queryForObject("select count(*) from transfer", Integer.class)).isZero();
+        assertThat(jdbc.queryForObject("select count(*) from outbox", Integer.class)).isZero();
 
         // La clave no quedó usada: con el repositorio otra vez normal, el reintento se hace
         reset(movementRepository);
         transferService.transfer(key, from, AccountNumber.of(910_002), new BigDecimal("100.00"), admin());
         assertThat(balance(from)).isEqualTo("900.00");
         assertThat(balance(to)).isEqualTo("1100.00");
+        assertThat(jdbc.queryForObject("select count(*) from outbox", Integer.class)).isEqualTo(1);
     }
 
     private UUID insertAccount(String customerId, String number) {

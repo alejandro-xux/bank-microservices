@@ -22,6 +22,12 @@ logging:
   level:
     org.hibernate.engine.internal.StatisticalLoggingSessionEventListener: warn
 
+# El relay del outbox no corre solo: las pruebas lo llaman a mano (OutboxRelay.publishBatch), sin carreras
+bank:
+  outbox:
+    relay:
+      enabled: false
+
 # Las pruebas no se registran en Eureka (no necesitan el discovery-server)
 eureka:
   client:
