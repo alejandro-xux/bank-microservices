@@ -18,7 +18,7 @@ programación reactiva, Kafka, Azure y Quarkus.
 **En un comando** (Docker encendido y las credenciales de Cosmos en `~/.bank-microservices.env`, o en la ruta que indique `BANK_ENV_FILE`):
 
 ```bash
-infra/start-local.sh    # Docker (Redis, PostgreSQL, Keycloak, Kafka, Mailpit) → config-server → discovery-server → customers-service → accounts-service → api-gateway
+infra/start-local.sh    # Docker (Redis, PostgreSQL, Keycloak, Kafka, Mailpit, mainframe emulado) → config-server → discovery-server → customers-service → accounts-service → api-gateway
 infra/stop-local.sh     # apaga los servicios (con --all también los contenedores de Docker)
 ```
 
@@ -66,6 +66,9 @@ docker exec bank-kafka /opt/kafka/bin/kafka-topics.sh --bootstrap-server kafka:9
 docker exec bank-kafka /opt/kafka/bin/kafka-console-consumer.sh --bootstrap-server kafka:9092 \
   --topic bank.transfers.v1 --from-beginning --property print.key=true
 ```
+
+### core-banking-mock (mainframe emulado, BANK-76)
+WireMock en el puerto **8089** que se comporta como un core bancario legado: recibe asientos contables en **tramas de largo fijo** (`POST /core/asientos`, 75 caracteres) y consultas (`POST /core/consultas`, 47) y responde igual (52). Sin estado: responde según reglas por los céntimos del monto (`.13` rechazo, `.99` tarda 5 s pero registra, `.98` core caído). Formato, reglas y límites en [infra/core-banking-mock/README.md](infra/core-banking-mock/README.md).
 
 ### Mailpit (correos de prueba)
 Recibe por SMTP en `localhost:1025` y muestra cada correo en http://localhost:8025. Guarda en memoria: se vacía al reiniciar. En Azure lo reemplaza un proveedor de correo real (por ejemplo, Azure Communication Services Email).

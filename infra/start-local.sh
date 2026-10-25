@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Levanta el entorno local en orden y espera a que cada pieza esté sana (BANK-49):
-#   Docker (Redis, PostgreSQL, Keycloak, Kafka y Mailpit) → config-server → discovery-server → customers-service
+#   Docker (Redis, PostgreSQL, Keycloak, Kafka, Mailpit y el mainframe emulado) → config-server → discovery-server → customers-service
 #   → accounts-service → notifications-service → api-gateway
 # Uso: infra/start-local.sh          Apagar: infra/stop-local.sh [--all]
 set -euo pipefail
@@ -61,7 +61,7 @@ wait_container() {
   done
 }
 
-echo "▶ Docker: Redis, PostgreSQL, Keycloak, Kafka y Mailpit"
+echo "▶ Docker: Redis, PostgreSQL, Keycloak, Kafka, Mailpit y el mainframe emulado"
 # kafka-init vuelve a correr en cada arranque: crea solo los topics que falten (--if-not-exists)
 docker compose -f "$ROOT/infra/docker-compose.yml" up -d > /dev/null
 if ! wait_for "http://localhost:8180/realms/bank/.well-known/openid-configuration" 120; then
@@ -70,7 +70,7 @@ if ! wait_for "http://localhost:8180/realms/bank/.well-known/openid-configuratio
 fi
 # PostgreSQL, Kafka y Mailpit están listos cuando su health check pasa a healthy
 HEALTH='{{.State.Health.Status}}'
-for container in bank-postgres bank-kafka bank-mailpit; do
+for container in bank-postgres bank-kafka bank-mailpit bank-core-banking-mock; do
   if ! wait_container "$container" healthy "$HEALTH" 90; then
     echo "✗ $container no quedó sano: docker logs $container" >&2
     exit 1
@@ -81,7 +81,7 @@ if ! wait_container bank-kafka-init "exited 0" '{{.State.Status}} {{.State.ExitC
   echo "✗ kafka-init no creó los topics: docker logs bank-kafka-init" >&2
   exit 1
 fi
-echo "• redis :6380, postgres :5433, keycloak :8180, kafka :9094 (topics listos) y mailpit :8025 listos"
+echo "• redis :6380, postgres :5433, keycloak :8180, kafka :9094 (topics listos), mailpit :8025 y core-banking-mock :8089 listos"
 
 echo "▶ Servicios"
 start config-server 8888 /actuator/health
@@ -127,6 +127,7 @@ cat <<EOF
    Keycloak        http://localhost:8180/admin  (admin / admin)
    Kafka           localhost:9094  (topics bank.transfers.v1 y bank.transfers.v1.DLT)
    Correos         http://localhost:8025  (Mailpit)
+   Mainframe       http://localhost:8089/core/asientos  (core-banking-mock, tramas de largo fijo)
    Datos de prueba infra/seed-local.sh --show  (número → id de cada cuenta)
    Logs            $LOGS
    Apagar          infra/stop-local.sh   (con --all también los contenedores de Docker)
