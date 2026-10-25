@@ -10,7 +10,8 @@
   "roles": {
     "realm": [
       { "name": "CUSTOMER", "description": "Cliente del banco: solo sus propios datos" },
-      { "name": "ADMIN", "description": "Asesor del banco" }
+      { "name": "ADMIN", "description": "Asesor del banco" },
+      { "name": "NOTIFICATIONS", "description": "Cuenta de servicio de notifications-service: solo GetContact (BANK-71)" }
     ]
   },
   "clients": [
@@ -125,11 +126,51 @@
           }
         }
       ]
+    },
+    {
+      "clientId": "notifications-service",
+      "name": "notifications-service (cuenta de servicio)",
+      "description": "Client credentials: el servicio pide su propio token, sin usuario (BANK-71). En Azure: un app registration o una identidad administrada con el app role NOTIFICATIONS. El secreto es solo local.",
+      "enabled": true,
+      "publicClient": false,
+      "secret": "notifications-local",
+      "serviceAccountsEnabled": true,
+      "standardFlowEnabled": false,
+      "directAccessGrantsEnabled": false,
+      "fullScopeAllowed": false,
+      "protocolMappers": [
+        {
+          "name": "roles",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-usermodel-realm-role-mapper",
+          "config": {
+            "claim.name": "roles",
+            "multivalued": "true",
+            "jsonType.label": "String",
+            "access.token.claim": "true",
+            "id.token.claim": "false",
+            "userinfo.token.claim": "false",
+            "introspection.token.claim": "true"
+          }
+        },
+        {
+          "name": "audience bank-api",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-audience-mapper",
+          "config": {
+            "included.custom.audience": "bank-api",
+            "access.token.claim": "true",
+            "id.token.claim": "false",
+            "introspection.token.claim": "true"
+          }
+        }
+      ]
     }
   ],
   "scopeMappings": [
     { "client": "bank-cli", "roles": ["CUSTOMER", "ADMIN"] },
-    { "client": "bank-web", "roles": ["CUSTOMER", "ADMIN"] }
+    { "client": "bank-web", "roles": ["CUSTOMER", "ADMIN"] },
+    { "client": "notifications-service", "roles": ["NOTIFICATIONS"] }
   ],
   "users": [
     {
@@ -153,6 +194,12 @@
       "enabled": true,
       "credentials": [{ "type": "password", "value": "asesor-local", "temporary": false }],
       "realmRoles": ["ADMIN"]
+    },
+    {
+      "username": "service-account-notifications-service",
+      "enabled": true,
+      "serviceAccountClientId": "notifications-service",
+      "realmRoles": ["NOTIFICATIONS"]
     }
   ]
 }

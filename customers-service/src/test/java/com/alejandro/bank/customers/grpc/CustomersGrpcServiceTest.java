@@ -1,11 +1,14 @@
 package com.alejandro.bank.customers.grpc;
 
+import com.alejandro.bank.contracts.customers.v1.CustomerContact;
 import com.alejandro.bank.contracts.customers.v1.CustomerStatus;
 import com.alejandro.bank.contracts.customers.v1.CustomerSummary;
 import com.alejandro.bank.contracts.customers.v1.CustomersServiceGrpc;
+import com.alejandro.bank.contracts.customers.v1.GetContactRequest;
 import com.alejandro.bank.contracts.customers.v1.GetCustomerRequest;
 import com.alejandro.bank.contracts.customers.v1.GetMyCustomerRequest;
 import com.alejandro.bank.customers.domain.Customer;
+import com.alejandro.bank.customers.domain.Email;
 import com.alejandro.bank.customers.exception.CustomerNotFoundException;
 import com.alejandro.bank.customers.repository.CustomerRepository;
 import com.alejandro.bank.customers.service.CustomerService;
@@ -71,6 +74,51 @@ class CustomersGrpcServiceTest {
         when(jwtDecoder.decode("token-ana")).thenReturn(jwt("token-ana", ANA_OID, "CUSTOMER"));
         when(jwtDecoder.decode("token-sin-vinculo")).thenReturn(jwt("token-sin-vinculo", "5e5e5e5e", "CUSTOMER"));
         when(jwtDecoder.decode("token-falso")).thenThrow(new BadJwtException("firma inválida"));
+        // Cuenta de servicio de notifications-service (client credentials): sin oid de persona
+        when(jwtDecoder.decode("token-notificaciones")).thenReturn(jwt("token-notificaciones", "svc-notif", "NOTIFICATIONS"));
+    }
+
+    // ---- GetContact (solo la cuenta de servicio de notifications, BANK-71) ----
+
+    @Test
+    void notificationsGetsTheNameAndThePrimaryEmail() {
+        Customer ana = Customer.builder().id(ANA).firstName("Ana").paternalLastName("Torres")
+                .emails(List.of(new Email("ana.trabajo@bank.local", Email.Type.WORK, false, true),
+                        new Email("ana@bank.local", Email.Type.PERSONAL, true, true)))
+                .build();
+        when(customerService.findById(ANA)).thenReturn(Mono.just(ana));
+
+        CustomerContact contact = stub("token-notificaciones").getContact(GetContactRequest.newBuilder().setId(ANA).build());
+
+        assertThat(contact.getId()).isEqualTo(ANA);
+        assertThat(contact.getName()).isEqualTo("Ana Torres");
+        assertThat(contact.getEmail()).isEqualTo("ana@bank.local");
+    }
+
+    @Test
+    void neitherTheAdminNorTheCustomerCanReadContactData() {
+        GetContactRequest request = GetContactRequest.newBuilder().setId(ANA).build();
+
+        assertThat(statusOf(() -> stub("token-asesor").getContact(request)).getCode()).isEqualTo(Status.Code.PERMISSION_DENIED);
+        assertThat(statusOf(() -> stub("token-ana").getContact(request)).getCode()).isEqualTo(Status.Code.PERMISSION_DENIED);
+        verify(customerService, never()).findById(any());
+    }
+
+    @Test
+    void theNotificationsServiceAccountCanOnlyUseGetContact() {
+        // Menor privilegio: con su token no puede pedir el estado ni hacerse pasar por un cliente
+        assertThat(statusOf(() -> stub("token-notificaciones").getCustomer(GetCustomerRequest.newBuilder().setId(ANA).build())).getCode())
+                .isEqualTo(Status.Code.PERMISSION_DENIED);
+        assertThat(statusOf(() -> stub("token-notificaciones").getMyCustomer(GetMyCustomerRequest.getDefaultInstance())).getCode())
+                .isEqualTo(Status.Code.PERMISSION_DENIED);
+    }
+
+    @Test
+    void contactOfAnUnknownCustomerIsNotFound() {
+        when(customerService.findById("no-existe")).thenReturn(Mono.error(new CustomerNotFoundException("no-existe")));
+
+        assertThat(statusOf(() -> stub("token-notificaciones").getContact(GetContactRequest.newBuilder().setId("no-existe").build())).getCode())
+                .isEqualTo(Status.Code.NOT_FOUND);
     }
 
     // ---- GetCustomer (solo asesor) ----

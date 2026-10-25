@@ -66,6 +66,13 @@ Usuarios de prueba (contraseñas solo locales, no son secretos):
 | `ana` | `ana-local` | `CUSTOMER` | `4f8c2a1e-6b3d-4c9a-9e7f-2d5b8a1c3e01` |
 | `asesor` | `asesor-local` | `ADMIN` | `7b2e9d4c-1a5f-4e8b-b3c6-9f0a2d4e6b02` |
 
+Cuenta de servicio (BANK-71): el cliente confidencial `notifications-service` (secreto local `notifications-local`) pide su propio token con *client credentials*, sin usuario. Su token lleva solo el rol `NOTIFICATIONS` y la audiencia `bank-api`; en Azure es un app registration (o una identidad administrada) con ese app role.
+
+```bash
+curl -s -d grant_type=client_credentials -d client_id=notifications-service -d client_secret=notifications-local \
+  http://localhost:8180/realms/bank/protocol/openid-connect/token
+```
+
 Obtener un token (cliente `bank-cli`, password grant solo en local) y ver sus claims:
 
 ```bash
@@ -154,12 +161,13 @@ Los 401 y 403 responden en formato ProblemDetail (`application/problem+json`), i
 
 **Probar desde Swagger** (http://localhost:8081/swagger-ui.html): botón **Authorize** → bloque *authorization_code with PKCE* (cliente `bank-web`, sin secreto) → **Authorize** → iniciar sesión en Keycloak como `ana` o `asesor`. Desde ahí, *Try it out* envía el token en cada llamada. En Azure se usa el mismo botón con Entra, definiendo `AUTH_ISSUER_URI` y `SWAGGER_CLIENT_ID`.
 
-**gRPC interno** (BANK-61): además de REST en `:8081`, customers-service responde por gRPC en `:9091` (`GRPC_PORT`) con el contrato de [`contracts/customers.proto`](contracts/README.md). Lo usa accounts-service; la app y el gateway siguen con REST.
+**gRPC interno** (BANK-61): además de REST en `:8081`, customers-service responde por gRPC en `:9091` (`GRPC_PORT`) con el contrato de [`contracts/customers.proto`](contracts/README.md). Lo usan accounts-service y notifications-service; la app y el gateway siguen con REST.
 
 | Método | Quién | Respuesta |
 |---|---|---|
 | `GetCustomer(id)` | ADMIN | el resumen del cliente (`id`, `status`); no existe → `NOT_FOUND` |
 | `GetMyCustomer()` | CUSTOMER | el cliente vinculado al token; sin vínculo → `PERMISSION_DENIED` |
+| `GetContact(id)` | NOTIFICATIONS (cuenta de servicio de notifications-service) | nombre y correo principal para un aviso; no existe → `NOT_FOUND`. Ni el cliente ni el asesor pueden: el que no avisa no necesita el correo (BANK-71) |
 
 - El JWT va en la metadata `authorization` y se valida con las mismas propiedades que REST (iss, `aud = bank-api`, roles). Sin token o con uno inválido → `UNAUTHENTICATED`; sin el rol → `PERMISSION_DENIED`.
 - `grpc.health.v1.Health` responde sin token, para las probes. *Reflection* solo se activa con `GRPC_REFLECTION_ENABLED=true`, para explorar en local con grpcurl.
@@ -297,7 +305,10 @@ cd notifications-service
 - Su propia base `notifications` en el PostgreSQL local (usuario `notifications`, que no puede entrar a la de accounts); esquema con Flyway.
 - Si Kafka todavía no arrancó, el servicio queda sano igual (la readiness solo incluye la base) y el consumidor reintenta solo: los eventos esperan en el topic.
 - Por ahora deja cada transferencia en el log, con los números de cuenta enmascarados. El correo llega en BANK-72.
-- Variables: `KAFKA_BOOTSTRAP_SERVERS` (por defecto `localhost:9094`) y `DB_HOST`, `DB_PORT`, `DB_NAME`, `DB_USERNAME`, `DB_PASSWORD`.
+- **Contacto del cliente** (BANK-71): el evento no trae datos personales, así que pide nombre y correo a customers-service por gRPC (`GetContact`) con su **propio token** (*client credentials* contra Keycloak, rol `NOTIFICATIONS`). El token se guarda y se pide uno nuevo solo cuando está por vencer (5 llamadas → 1 token). Cliente inexistente → no se avisa; customers-service o Keycloak caídos → error que se reintenta. Plazo de 2 s por llamada (`CUSTOMERS_DEADLINE`).
+- Necesita `NOTIFICATIONS_CLIENT_SECRET` (config-repo no tiene valor por defecto; `start-local.sh` pone el local). En Azure: `AUTH_TOKEN_URI` y `AUTH_CLIENT_SCOPE` (`api://bank-api/.default`) de Entra.
+- Sin API: Spring Security solo deja pasar `/actuator/health` y `/actuator/info`.
+- Variables: `KAFKA_BOOTSTRAP_SERVERS` (por defecto `localhost:9094`), `CUSTOMERS_GRPC_ADDRESS` (por defecto `static://localhost:9091`) y `DB_HOST`, `DB_PORT`, `DB_NAME`, `DB_USERNAME`, `DB_PASSWORD`.
 - Ver el avance del grupo (lag = eventos que le faltan leer):
 
 ```bash

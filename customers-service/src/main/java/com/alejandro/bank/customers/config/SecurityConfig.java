@@ -18,6 +18,8 @@ public class SecurityConfig {
     // Roles del claim "roles" del token
     public static final String ADMIN = "ADMIN";
     public static final String CUSTOMER = "CUSTOMER";
+    // Cuenta de servicio de notifications-service (client credentials, BANK-71): solo GetContact por gRPC
+    public static final String NOTIFICATIONS = "NOTIFICATIONS";
 
     // Rutas sin token: probes de AKS y documentación de la API
     private static final String[] PUBLIC_PATHS = {

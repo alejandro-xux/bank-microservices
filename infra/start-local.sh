@@ -19,6 +19,10 @@ if [ -z "${COSMOS_ENDPOINT:-}" ] || [ -z "${COSMOS_KEY:-}" ]; then
   exit 1
 fi
 
+# Secreto del cliente notifications-service del Keycloak LOCAL (infra/keycloak/bank-realm.json, BANK-71): no es
+# un secreto real, por eso puede ir aquí; en Azure llega por variable desde Key Vault
+export NOTIFICATIONS_CLIENT_SECRET="${NOTIFICATIONS_CLIENT_SECRET:-notifications-local}"
+
 # Espera hasta que la URL responda con el código esperado (por defecto 200), como máximo $2 segundos
 wait_for() {
   local url=$1 timeout=$2 expected=${3:-200} waited=0

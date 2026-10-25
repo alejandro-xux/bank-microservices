@@ -39,6 +39,11 @@ class CustomersContractTest {
         assertThat(CustomerSummary.ID_FIELD_NUMBER).isEqualTo(1);
         assertThat(CustomerSummary.STATUS_FIELD_NUMBER).isEqualTo(2);
         assertThat(GetCustomerRequest.ID_FIELD_NUMBER).isEqualTo(1);
+        // BANK-71
+        assertThat(GetContactRequest.ID_FIELD_NUMBER).isEqualTo(1);
+        assertThat(CustomerContact.ID_FIELD_NUMBER).isEqualTo(1);
+        assertThat(CustomerContact.NAME_FIELD_NUMBER).isEqualTo(2);
+        assertThat(CustomerContact.EMAIL_FIELD_NUMBER).isEqualTo(3);
     }
 
     @Test
@@ -60,12 +65,13 @@ class CustomersContractTest {
     }
 
     @Test
-    void theServiceExposesExactlyTheTwoAgreedMethods() {
+    void theServiceExposesExactlyTheAgreedMethods() {
         assertThat(CustomersServiceGrpc.getServiceDescriptor().getName()).isEqualTo("bank.customers.v1.CustomersService");
         assertThat(CustomersServiceGrpc.getServiceDescriptor().getMethods())
                 .extracting(method -> method.getFullMethodName())
                 .containsExactlyInAnyOrder(
                         "bank.customers.v1.CustomersService/GetCustomer",
-                        "bank.customers.v1.CustomersService/GetMyCustomer");
+                        "bank.customers.v1.CustomersService/GetMyCustomer",
+                        "bank.customers.v1.CustomersService/GetContact");
     }
 }
