@@ -46,6 +46,8 @@ public class SecurityConfig {
                         .requestMatchers(HttpMethod.GET, "/accounts/me").hasRole(CUSTOMER)
                         // Una cuenta: asesor o cliente; que sea el dueño lo revisa AccountAccessPolicy
                         .requestMatchers(HttpMethod.GET, "/accounts/*").hasAnyRole(ADMIN, CUSTOMER)
+                        // Historial: asesor o cliente; la misma regla del dueño (BANK-57)
+                        .requestMatchers(HttpMethod.GET, "/accounts/*/movements").hasAnyRole(ADMIN, CUSTOMER)
                         // Transferir: asesor o cliente; que la cuenta origen sea suya lo revisa AccountAccessPolicy
                         .requestMatchers(HttpMethod.POST, "/transfers").hasAnyRole(ADMIN, CUSTOMER)
                         .anyRequest().authenticated())

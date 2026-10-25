@@ -226,6 +226,11 @@ curl -i -X POST http://localhost:8082/transfers -H "Authorization: Bearer $TOKEN
 - Las dos cuentas se bloquean (`FOR UPDATE`) siempre en el mismo orden, el id menor primero. Así dos transferencias cruzadas (A→B y B→A) no se bloquean entre sí: con el orden de la petición, PostgreSQL detecta *deadlock detected*.
 - La clave se reclama con un `INSERT` antes de tocar los saldos. Un doble clic simultáneo choca con el `UNIQUE` y responde la transferencia del primero.
 
+**Historial de movimientos**: `GET /accounts/{id}/movements?page=0&size=20` (`size` como máximo 50), del más reciente al más antiguo, con la misma regla del dueño que `GET /accounts/{id}`. Cada línea trae el tipo, el monto, el saldo después y, si vino de una transferencia, la otra cuenta enmascarada (`001-******0003-2`).
+
+- Sale en un número fijo de consultas (la cuenta, la página y el total), sin importar el tamaño de la página: la otra cuenta viene del mismo `LEFT JOIN`, no de una consulta por movimiento (N+1). La prueba lo demuestra contando las sentencias con las estadísticas de Hibernate: una versión N+1 hace 13 con `size=5` y 51 con `size=25`; esta hace 3 en los dos casos.
+- Usa el índice `movement(account_id, created_at DESC)`.
+
 - El vínculo entre cuenta de acceso y cliente no se copia en accounts-service: se pregunta cada vez, porque el asesor puede cambiarlo (BANK-48).
 - Si customers-service no responde, las consultas de un cliente devuelven 503 (las del asesor no dependen de él). Cuando vuelve, accounts-service tarda hasta ~1 minuto en encontrarlo: refresca su copia de Eureka cada 30 s y el load balancer tiene su propio caché. Mientras tanto sigue respondiendo 503.
 
