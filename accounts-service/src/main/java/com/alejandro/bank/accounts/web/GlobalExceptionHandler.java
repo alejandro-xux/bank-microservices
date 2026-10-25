@@ -1,5 +1,6 @@
 package com.alejandro.bank.accounts.web;
 
+import com.alejandro.bank.accounts.exception.AccountNotActiveException;
 import com.alejandro.bank.accounts.exception.AccountNotFoundException;
 import com.alejandro.bank.accounts.exception.CustomerNotEligibleException;
 import com.alejandro.bank.accounts.exception.CustomersUnavailableException;
@@ -76,6 +77,14 @@ public class GlobalExceptionHandler {
     public ProblemDetail handleAccountNotFound(AccountNotFoundException ex) {
         ProblemDetail problem = ProblemDetail.forStatusAndDetail(HttpStatus.NOT_FOUND, ex.getMessage());
         problem.setTitle("Recurso no encontrado");
+        return problem;
+    }
+
+    // 422: la cuenta está bloqueada o cerrada (BANK-55)
+    @ExceptionHandler(AccountNotActiveException.class)
+    public ProblemDetail handleAccountNotActive(AccountNotActiveException ex) {
+        ProblemDetail problem = ProblemDetail.forStatusAndDetail(HttpStatus.UNPROCESSABLE_CONTENT, ex.getMessage());
+        problem.setTitle("Cuenta no activa");
         return problem;
     }
 

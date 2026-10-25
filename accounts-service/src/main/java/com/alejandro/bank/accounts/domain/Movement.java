@@ -4,6 +4,8 @@ import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
 import jakarta.persistence.Enumerated;
+import jakarta.persistence.GeneratedValue;
+import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
 import lombok.AccessLevel;
@@ -22,7 +24,9 @@ import java.util.UUID;
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 public class Movement {
 
+    // Lo genera Hibernate al guardar (un solo INSERT, como en Account)
     @Id
+    @GeneratedValue(strategy = GenerationType.UUID)
     private UUID id;
 
     @Column(name = "account_id")
@@ -42,4 +46,15 @@ public class Movement {
 
     @Column(name = "created_at")
     private Instant createdAt;
+
+    // Entrada de dinero sin transferencia (depósito en ventanilla, BANK-55)
+    public static Movement credit(UUID accountId, BigDecimal amount, BigDecimal balanceAfter) {
+        Movement movement = new Movement();
+        movement.accountId = accountId;
+        movement.type = MovementType.CREDIT;
+        movement.amount = amount;
+        movement.balanceAfter = balanceAfter;
+        movement.createdAt = Instant.now();
+        return movement;
+    }
 }
