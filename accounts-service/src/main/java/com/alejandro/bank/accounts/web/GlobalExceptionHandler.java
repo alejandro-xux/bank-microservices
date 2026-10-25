@@ -1,13 +1,17 @@
 package com.alejandro.bank.accounts.web;
 
+import com.alejandro.bank.accounts.exception.AccountNotFoundException;
 import com.alejandro.bank.accounts.exception.CustomerNotEligibleException;
 import com.alejandro.bank.accounts.exception.CustomersUnavailableException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ProblemDetail;
 import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
+import org.springframework.web.bind.MissingServletRequestParameterException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
+import org.springframework.web.method.annotation.HandlerMethodValidationException;
+import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
 
 import java.util.List;
 import java.util.Map;
@@ -38,6 +42,40 @@ public class GlobalExceptionHandler {
         ProblemDetail problem = ProblemDetail.forStatusAndDetail(
                 HttpStatus.BAD_REQUEST, "El cuerpo de la solicitud no es válido");
         problem.setTitle("Solicitud mal formada");
+        return problem;
+    }
+
+    // 400: un @RequestParam no cumple sus reglas (@Pattern...)
+    @ExceptionHandler(HandlerMethodValidationException.class)
+    public ProblemDetail handleParameterValidation(HandlerMethodValidationException ex) {
+        ProblemDetail problem = ProblemDetail.forStatusAndDetail(
+                HttpStatus.BAD_REQUEST, "La solicitud tiene parámetros inválidos");
+        problem.setTitle("Datos inválidos");
+
+        List<Map<String, String>> errors = ex.getParameterValidationResults().stream()
+                .flatMap(result -> result.getResolvableErrors().stream()
+                        .map(error -> Map.of(
+                                "field", String.valueOf(result.getMethodParameter().getParameterName()),
+                                "message", String.valueOf(error.getDefaultMessage()))))
+                .toList();
+        problem.setProperty("errors", errors);
+        return problem;
+    }
+
+    // 400: falta un parámetro obligatorio o no tiene el tipo esperado (un {id} que no es UUID)
+    @ExceptionHandler({MissingServletRequestParameterException.class, MethodArgumentTypeMismatchException.class})
+    public ProblemDetail handleBadParameter(Exception ex) {
+        ProblemDetail problem = ProblemDetail.forStatusAndDetail(
+                HttpStatus.BAD_REQUEST, "Falta un parámetro o tiene un formato inválido");
+        problem.setTitle("Datos inválidos");
+        return problem;
+    }
+
+    // 404: la cuenta no existe (solo lo recibe el asesor)
+    @ExceptionHandler(AccountNotFoundException.class)
+    public ProblemDetail handleAccountNotFound(AccountNotFoundException ex) {
+        ProblemDetail problem = ProblemDetail.forStatusAndDetail(HttpStatus.NOT_FOUND, ex.getMessage());
+        problem.setTitle("Recurso no encontrado");
         return problem;
     }
 
