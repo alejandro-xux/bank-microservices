@@ -1,6 +1,7 @@
 package com.alejandro.bank.customers.service;
 
 import com.alejandro.bank.customers.cache.CustomerCache;
+import com.alejandro.bank.customers.cache.IdentityCache;
 import com.alejandro.bank.customers.domain.*;
 import com.alejandro.bank.customers.exception.CustomerAlreadyExistsException;
 import com.alejandro.bank.customers.exception.CustomerModifiedException;
@@ -39,6 +40,9 @@ class CustomerServiceTest {
     @Mock
     CustomerCache customerCache;
 
+    @Mock
+    IdentityCache identityCache;
+
     @InjectMocks
     CustomerService customerService;
 
@@ -48,6 +52,9 @@ class CustomerServiceTest {
         lenient().when(customerCache.get(any())).thenReturn(Mono.empty());
         lenient().when(customerCache.put(any())).thenReturn(Mono.empty());
         lenient().when(customerCache.evict(any())).thenReturn(Mono.empty());
+        lenient().when(identityCache.get(any())).thenReturn(Mono.empty());
+        lenient().when(identityCache.put(any(), any())).thenReturn(Mono.empty());
+        lenient().when(identityCache.evict(any())).thenReturn(Mono.empty());
     }
 
     @Test
@@ -326,6 +333,63 @@ class CustomerServiceTest {
                 .verifyComplete();
     }
 
+    // ---- Cache del vínculo (BANK-65) ----
+
+    @Test
+    void aCachedLinkSkipsTheCrossPartitionQuery() {
+        Customer ana = Customer.builder().id("abc-123").identityId("oid-ana").build();
+        when(identityCache.get("oid-ana")).thenReturn(Mono.just("abc-123"));
+        when(customerCache.get("abc-123")).thenReturn(Mono.just(ana));
+
+        StepVerifier.create(customerService.findByIdentityId("oid-ana"))
+                .expectNext(ana)
+                .verifyComplete();
+        verify(customerRepository, never()).findByIdentityId(any());
+    }
+
+    @Test
+    void aMissQueriesCosmosAndRemembersTheLink() {
+        Customer ana = Customer.builder().id("abc-123").identityId("oid-ana").build();
+        when(customerRepository.findByIdentityId("oid-ana")).thenReturn(Flux.just(ana));
+
+        StepVerifier.create(customerService.findByIdentityId("oid-ana"))
+                .expectNext(ana)
+                .verifyComplete();
+        verify(identityCache).put("oid-ana", "abc-123");
+    }
+
+    @Test
+    void anUnlinkedAccountIsNotCachedAsIfItExisted() {
+        when(customerRepository.findByIdentityId("oid-sin-cliente")).thenReturn(Flux.empty());
+
+        StepVerifier.create(customerService.findByIdentityId("oid-sin-cliente"))
+                .verifyComplete();
+        verify(identityCache, never()).put(any(), any());
+    }
+
+    // Segunda barrera: aunque el vínculo cacheado quedara viejo, la ficha manda
+    @Test
+    void aStaleCachedLinkIsIgnoredWhenTheCustomerIsNoLongerLinked() {
+        Customer unlinked = Customer.builder().id("abc-123").identityId(null).build();
+        when(identityCache.get("oid-ana")).thenReturn(Mono.just("abc-123"));
+        when(customerCache.get("abc-123")).thenReturn(Mono.just(unlinked));
+        when(customerRepository.findByIdentityId("oid-ana")).thenReturn(Flux.empty());
+
+        StepVerifier.create(customerService.findByIdentityId("oid-ana"))
+                .verifyComplete();
+        verify(identityCache).evict("oid-ana");
+    }
+
+    @Test
+    void aCachedLinkToADeletedCustomerFallsBackToCosmos() {
+        when(identityCache.get("oid-ana")).thenReturn(Mono.just("ya-no-existe"));
+        when(customerRepository.findById("ya-no-existe")).thenReturn(Mono.empty());
+        when(customerRepository.findByIdentityId("oid-ana")).thenReturn(Flux.empty());
+
+        StepVerifier.create(customerService.findByIdentityId("oid-ana"))
+                .verifyComplete();
+    }
+
     // ---- Vínculo cuenta ↔ cliente (BANK-48) ----
 
     private static final String ANA_OID = "4f8c2a1e-6b3d-4c9a-9e7f-2d5b8a1c3e01";
@@ -347,6 +411,8 @@ class CustomerServiceTest {
                 .verifyComplete();
 
         verify(customerCache).evict("abc-123");
+        // BANK-65: el vínculo nuevo no puede quedar tapado por una entrada vieja
+        verify(identityCache).evict(ANA_OID);
     }
 
     @Test
@@ -416,6 +482,8 @@ class CustomerServiceTest {
 
         verify(customerRepository).save(argThat(saved -> saved.getIdentityId() == null));
         verify(customerCache).evict("abc-123");
+        // BANK-65: la cuenta desvinculada deja de resolverse al instante
+        verify(identityCache).evict(ANA_OID);
     }
 
     @Test

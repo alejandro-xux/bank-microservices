@@ -8,11 +8,6 @@ spring:
     azure:
       cosmos:
         enabled: false
-  # El servidor gRPC de las pruebas no usa el 9091 (puede estar ocupado por el servicio en local);
-  # las pruebas de gRPC van en memoria (@AutoConfigureInProcessTransport)
-  grpc:
-    server:
-      port: 0
 
 # Las pruebas no se registran en Eureka (no necesitan el discovery-server)
 eureka:

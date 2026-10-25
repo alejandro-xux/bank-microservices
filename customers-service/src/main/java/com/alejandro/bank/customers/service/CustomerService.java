@@ -1,6 +1,7 @@
 package com.alejandro.bank.customers.service;
 
 import com.alejandro.bank.customers.cache.CustomerCache;
+import com.alejandro.bank.customers.cache.IdentityCache;
 import com.alejandro.bank.customers.domain.Customer;
 import com.alejandro.bank.customers.domain.CustomerStatus;
 import com.alejandro.bank.customers.domain.DocumentType;
@@ -38,6 +39,7 @@ public class CustomerService {
 
     private final CustomerRepository customerRepository;
     private final CustomerCache customerCache;
+    private final IdentityCache identityCache;
 
     public Mono<Customer> register(Customer customer) {
         Instant now = Instant.now();
@@ -67,8 +69,21 @@ public class CustomerService {
     }
 
     // Cliente vinculado a la cuenta (identityId = oid del token); vacío si no hay ninguno.
-    // Dos clientes con el mismo vínculo sería un error de datos: se usa el primero y se avisa en el log.
+    // Cache Aside del vínculo (BANK-65): con el id guardado en Redis, la ficha sale de su propio cache
+    // y la consulta cross-partition a Cosmos (~250 ms) se evita. La ficha manda: si ya no está vinculada a
+    // este oid, el atajo no sirve y se consulta Cosmos. Un oid sin vínculo no se guarda
     public Mono<Customer> findByIdentityId(String identityId) {
+        return identityCache.get(identityId)
+                .flatMap(customerId -> findById(customerId)
+                        .filter(customer -> identityId.equals(customer.getIdentityId()))
+                        .onErrorResume(CustomerNotFoundException.class, ex -> Mono.empty()))
+                .switchIfEmpty(Mono.defer(() -> findIdentityInDatabase(identityId)
+                        .flatMap(customer -> identityCache.put(identityId, customer.getId()).thenReturn(customer))
+                        .switchIfEmpty(identityCache.evict(identityId).then(Mono.empty()))));
+    }
+
+    // Dos clientes con el mismo vínculo sería un error de datos: se usa el primero y se avisa en el log
+    private Mono<Customer> findIdentityInDatabase(String identityId) {
         return customerRepository.findByIdentityId(identityId)
                 .take(2)
                 .collectList()
@@ -120,7 +135,9 @@ public class CustomerService {
                                     return Mono.error(IdentityAlreadyLinkedException.accountLinkedToAnotherCustomer());
                                 }
                                 customer.setIdentityId(identityId);
-                                return saveAndEvict(customer);
+                                // El dueño del dato invalida: nadie queda leyendo un vínculo viejo
+                                return saveAndEvict(customer)
+                                        .flatMap(saved -> identityCache.evict(identityId).thenReturn(saved));
                             });
                 })
                 .doOnNext(customer -> log.info("Cuenta de acceso vinculada al cliente {}", id));
@@ -134,8 +151,10 @@ public class CustomerService {
                     if (customer.getIdentityId() == null) {
                         return Mono.just(customer);
                     }
+                    String previousIdentity = customer.getIdentityId();
                     customer.setIdentityId(null);
                     return saveAndEvict(customer)
+                            .flatMap(saved -> identityCache.evict(previousIdentity).thenReturn(saved))
                             .doOnNext(saved -> log.info("Cuenta de acceso desvinculada del cliente {}", id));
                 })
                 .then();

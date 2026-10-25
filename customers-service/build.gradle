@@ -61,4 +61,7 @@ tasks.named('test') {
 	// apagado desde el arranque (en application-test.yaml llegaría tarde: el import se procesa antes)
 	systemProperty 'spring.profiles.active', 'test'
 	systemProperty 'spring.cloud.config.enabled', 'false'
+	// Servidor gRPC de las pruebas en un puerto libre: el 9091 puede estar ocupado por el servicio en local.
+	// Va aquí y no en application-test.yaml porque config-repo/ (que ese archivo importa) le ganaría
+	systemProperty 'spring.grpc.server.port', '0'
 }
