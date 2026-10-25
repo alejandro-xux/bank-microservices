@@ -133,6 +133,18 @@ Los 401 y 403 responden en formato ProblemDetail (`application/problem+json`), i
 
 **Probar desde Swagger** (http://localhost:8081/swagger-ui.html): botón **Authorize** → bloque *authorization_code with PKCE* (cliente `bank-web`, sin secreto) → **Authorize** → iniciar sesión en Keycloak como `ana` o `asesor`. Desde ahí, *Try it out* envía el token en cada llamada. En Azure se usa el mismo botón con Entra, definiendo `AUTH_ISSUER_URI` y `SWAGGER_CLIENT_ID`.
 
+**gRPC interno** (BANK-61): además de REST en `:8081`, customers-service responde por gRPC en `:9091` (`GRPC_PORT`) con el contrato de [`contracts/customers.proto`](contracts/README.md). Lo usa accounts-service; la app y el gateway siguen con REST.
+
+| Método | Quién | Respuesta |
+|---|---|---|
+| `GetCustomer(id)` | ADMIN | el resumen del cliente (`id`, `status`); no existe → `NOT_FOUND` |
+| `GetMyCustomer()` | CUSTOMER | el cliente vinculado al token; sin vínculo → `PERMISSION_DENIED` |
+
+- El JWT va en la metadata `authorization` y se valida con las mismas propiedades que REST (iss, `aud = bank-api`, roles). Sin token o con uno inválido → `UNAUTHENTICATED`; sin el rol → `PERMISSION_DENIED`.
+- `grpc.health.v1.Health` responde sin token, para las probes. *Reflection* solo se activa con `GRPC_REFLECTION_ENABLED=true`, para explorar en local con grpcurl.
+- Si el cliente corta (deadline vencido), el servidor cancela la consulta en curso.
+- La primera llamada después de arrancar puede tardar varios segundos: el cliente de Cosmos se inicia en ~6 s y las claves de Keycloak se descargan con el primer token.
+
 ### api-gateway (punto de entrada)
 La API se usa por el **puerto 8080** con el prefijo `/api`: `GET http://localhost:8080/api/customers/me` llega a customers-service como `GET /customers/me`. Necesita el config-server; encuentra a customers-service por su nombre en Eureka.
 

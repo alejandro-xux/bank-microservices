@@ -6,6 +6,14 @@ spring:
       host: ${REDIS_HOST:localhost}
       port: ${REDIS_PORT:6380}
       timeout: 200ms
+  # gRPC interno (BANK-61): accounts-service consulta clientes por aquí con el contrato de contracts/.
+  # El token se valida con las mismas propiedades de application.yml (iss, aud, roles).
+  # Reflection (para explorar con grpcurl) solo si se activa en local; health siempre, para las probes
+  grpc:
+    server:
+      port: ${GRPC_PORT:9091}
+      reflection:
+        enabled: ${GRPC_REFLECTION_ENABLED:false}
 
 springdoc:
   swagger-ui:
