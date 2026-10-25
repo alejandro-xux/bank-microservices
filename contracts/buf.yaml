@@ -18,6 +18,7 @@ lint:
     # Los dos .proto están en la misma carpeta; cada paquete pediría la suya (bank/customers/v1, bank/transfers/v1)
     - PACKAGE_DIRECTORY_MATCH
     - PACKAGE_SAME_DIRECTORY
+    - DIRECTORY_SAME_PACKAGE
     # CustomerSummary es la respuesta de GetCustomer y de GetMyCustomer, y CustomerContact la de GetContact; el
     # estándar pide una respuesta propia por RPC (GetCustomerResponse…)
     - RPC_RESPONSE_STANDARD_NAME
