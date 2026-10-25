@@ -1,5 +1,6 @@
 package com.alejandro.bank.accounts.domain;
 
+import com.alejandro.bank.accounts.exception.AccountNotActiveException;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
@@ -16,8 +17,8 @@ import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.UUID;
 
-// Tabla account (V1__init.sql). Sin setters: se crea con open() y el saldo solo cambiará con las
-// operaciones del dominio (depositar, transferir) que llegan en BANK-55 y BANK-56.
+// Tabla account (V1__init.sql). Sin setters: se crea con open() y el saldo solo cambia con las
+// operaciones del dominio (deposit; las transferencias llegan en BANK-56).
 // Sin @Version: las transferencias bloquean las filas con FOR UPDATE (spike BANK-51)
 @Entity
 @Table(name = "account")
@@ -66,5 +67,15 @@ public class Account {
         account.createdAt = Instant.now();
         account.updatedAt = account.createdAt;
         return account;
+    }
+
+    // Depósito (BANK-55): solo en una cuenta activa. Se llama con la fila bloqueada (FOR UPDATE) dentro
+    // de una transacción; JPA guarda el saldo nuevo al hacer commit (la entidad está gestionada)
+    public void deposit(BigDecimal amount) {
+        if (status != AccountStatus.ACTIVE) {
+            throw new AccountNotActiveException(id, status);
+        }
+        balance = balance.add(amount);
+        updatedAt = Instant.now();
     }
 }

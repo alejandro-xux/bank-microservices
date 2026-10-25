@@ -193,6 +193,18 @@ curl -i -X POST http://localhost:8082/accounts -H "Authorization: Bearer $TOKEN"
 | `GET /accounts/{id}` | CUSTOMER | Solo las suyas; una ajena y una inexistente responden **el mismo 403** (no revela qué ids existen) |
 | `GET /accounts?customerId=` | ADMIN | Las cuentas de ese cliente (vacía si no tiene) |
 
+**Depósito en ventanilla** (solo asesor), en la moneda de la cuenta:
+
+```bash
+curl -X POST http://localhost:8082/accounts/{id}/deposits -H "Authorization: Bearer $TOKEN" \
+  -H 'Content-Type: application/json' -d '{"amount":"150.00"}'
+# 201 con el movimiento CREDIT; balanceAfter es el saldo nuevo
+```
+
+- En una sola transacción: bloquea la fila de la cuenta (`SELECT … FOR UPDATE`), suma el monto y registra el movimiento. Si algo falla, no cambia ni el saldo ni el historial, y dos depósitos simultáneos en la misma cuenta se aplican uno después del otro.
+- `amount` puede ir como texto (`"150.00"`) o como número (`150.00`): en los dos casos se lee exacto, sin `double`. Debe ser positivo, con 2 decimales como máximo (400 si no). Cuenta inexistente → 404; bloqueada o cerrada → 422; cliente (CUSTOMER) → 403.
+- Por ahora un doble clic registra dos depósitos: la `Idempotency-Key` llega con las transferencias (BANK-56).
+
 - El vínculo entre cuenta de acceso y cliente no se copia en accounts-service: se pregunta cada vez, porque el asesor puede cambiarlo (BANK-48).
 - Si customers-service no responde, las consultas de un cliente devuelven 503 (las del asesor no dependen de él). Cuando vuelve, accounts-service tarda hasta ~1 minuto en encontrarlo: refresca su copia de Eureka cada 30 s y el load balancer tiene su propio caché. Mientras tanto sigue respondiendo 503.
 

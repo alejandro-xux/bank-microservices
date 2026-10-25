@@ -40,6 +40,8 @@ public class SecurityConfig {
                         // Abrir cuentas y buscarlas por cliente: solo el asesor (BANK-53, BANK-54)
                         .requestMatchers(HttpMethod.POST, "/accounts").hasRole(ADMIN)
                         .requestMatchers(HttpMethod.GET, "/accounts").hasRole(ADMIN)
+                        // Depósito en ventanilla: solo el asesor (BANK-55)
+                        .requestMatchers(HttpMethod.POST, "/accounts/*/deposits").hasRole(ADMIN)
                         // Mis cuentas: solo un cliente (el asesor no tiene ficha de cliente). Va antes de /accounts/*
                         .requestMatchers(HttpMethod.GET, "/accounts/me").hasRole(CUSTOMER)
                         // Una cuenta: asesor o cliente; que sea el dueño lo revisa AccountAccessPolicy

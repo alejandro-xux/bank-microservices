@@ -1,12 +1,14 @@
 package com.alejandro.bank.accounts.web;
 
 import com.alejandro.bank.accounts.service.AccountService;
+import com.alejandro.bank.accounts.service.DepositService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.Pattern;
 import lombok.RequiredArgsConstructor;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -28,6 +30,7 @@ import java.util.UUID;
 public class AccountController {
 
     private final AccountService accountService;
+    private final DepositService depositService;
 
     @PostMapping
     @Operation(summary = "Abrir una cuenta para un cliente (solo asesor)")
@@ -70,5 +73,16 @@ public class AccountController {
                     message = "debe ser un UUID")
             String customerId) {
         return accountService.findByCustomer(customerId).stream().map(AccountResponse::from).toList();
+    }
+
+    @PostMapping("/{id}/deposits")
+    @Operation(summary = "Registrar un depósito en ventanilla (solo asesor), en la moneda de la cuenta")
+    @ApiResponse(responseCode = "201", description = "Movimiento CREDIT registrado; balanceAfter es el saldo nuevo")
+    @ApiResponse(responseCode = "400", description = "Monto ausente, no positivo o con más de 2 decimales")
+    @ApiResponse(responseCode = "404", description = "La cuenta no existe")
+    @ApiResponse(responseCode = "422", description = "La cuenta no está activa")
+    public ResponseEntity<MovementResponse> deposit(@PathVariable UUID id, @Valid @RequestBody DepositRequest request) {
+        return ResponseEntity.status(HttpStatus.CREATED)
+                .body(MovementResponse.from(depositService.deposit(id, request.amount())));
     }
 }
