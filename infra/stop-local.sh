@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
-# Apaga los servicios del entorno local en orden inverso (BANK-49); con --all también Redis, PostgreSQL y Keycloak.
+# Apaga los servicios del entorno local en orden inverso (BANK-49); con --all también los contenedores de Docker
+# (Redis, PostgreSQL, Keycloak, Kafka y Mailpit; sin volúmenes: la próxima vez arrancan vacíos).
 # Uso: infra/stop-local.sh [--all]
 set -uo pipefail
 
@@ -23,6 +24,6 @@ done
 
 if [ "${1:-}" = "--all" ]; then
   docker compose -f "$ROOT/infra/docker-compose.yml" down
-  echo "• Redis, PostgreSQL y Keycloak detenidos"
+  echo "• Redis, PostgreSQL, Keycloak, Kafka y Mailpit detenidos"
 fi
 echo "✅ Entorno local apagado"

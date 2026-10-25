@@ -18,19 +18,40 @@ programación reactiva, Kafka, Azure y Quarkus.
 **En un comando** (Docker encendido y las credenciales de Cosmos en `~/.bank-microservices.env`, o en la ruta que indique `BANK_ENV_FILE`):
 
 ```bash
-infra/start-local.sh    # Redis + PostgreSQL + Keycloak → config-server → discovery-server → customers-service → accounts-service → api-gateway
-infra/stop-local.sh     # apaga los servicios (con --all también Redis, PostgreSQL y Keycloak)
+infra/start-local.sh    # Docker (Redis, PostgreSQL, Keycloak, Kafka, Mailpit) → config-server → discovery-server → customers-service → accounts-service → api-gateway
+infra/stop-local.sh     # apaga los servicios (con --all también los contenedores de Docker)
 ```
 
 Espera a que cada pieza esté sana antes de seguir, salta las que ya están corriendo y termina cuando el gateway ya enruta a customers-service (~1 minuto desde cero). Los logs de cada servicio quedan en `.local/logs/`. Las secciones siguientes explican cada pieza por separado.
 
-Redis, PostgreSQL y Keycloak corren en Docker: Redis en el puerto **6380** y PostgreSQL en el **5433** (el 6379 y el 5432 pueden estar ocupados por otros proyectos), y Keycloak en el **8180**.
+La infraestructura corre en Docker: Redis en el puerto **6380**, PostgreSQL en el **5433** y Kafka en el **9094** (los estándar 6379, 5432 y 9092 pueden estar ocupados por otros proyectos), Keycloak en el **8180** y Mailpit en el **1025** (SMTP) y el **8025** (web). Ninguno guarda datos al hacer `down`: la próxima vez arrancan vacíos.
 
 ```bash
-docker compose -f infra/docker-compose.yml up -d   # levanta Redis, PostgreSQL y Keycloak
-docker compose -f infra/docker-compose.yml ps      # los tres deben decir "healthy" (Keycloak tarda ~30 s)
+docker compose -f infra/docker-compose.yml up -d   # levanta todo; kafka-init crea los topics y termina
+docker compose -f infra/docker-compose.yml ps      # todos "healthy" (Keycloak tarda ~30 s); kafka-init no aparece porque ya terminó
 docker compose -f infra/docker-compose.yml down    # los apaga
 ```
+
+### Kafka (eventos, BANK-67)
+Un solo nodo en modo KRaft (broker y controlador, sin ZooKeeper), `apache/kafka:4.3.1`. En Azure lo reemplaza Event Hubs (Standard o superior, endpoint Kafka en `:9093` con SASL_SSL) o Confluent Cloud; el código no cambia, solo la configuración.
+
+- Desde la máquina (servicios con `bootRun`): `localhost:9094`. Desde otro contenedor: `kafka:9092`. Son dos listeners porque Kafka le dice al cliente a qué dirección volver, y `localhost` dentro de un contenedor es el propio contenedor.
+- Los topics no los crea la app: los crea `infra/kafka/create-topics.sh` (contenedor `kafka-init`), como lo hará Terraform en Azure. La creación automática está apagada, así que publicar en un topic con un nombre mal escrito falla.
+
+| Topic | Particiones | Para qué |
+|---|---|---|
+| `bank.transfers.v1` | 3 | Transferencias completadas (clave = cuenta origen, así se mantiene el orden por cuenta) |
+| `bank.transfers.v1.DLT` | 3 | Mensajes que no se pudieron procesar |
+
+```bash
+# Ver los topics y leer un topic desde el principio
+docker exec bank-kafka /opt/kafka/bin/kafka-topics.sh --bootstrap-server kafka:9092 --describe
+docker exec bank-kafka /opt/kafka/bin/kafka-console-consumer.sh --bootstrap-server kafka:9092 \
+  --topic bank.transfers.v1 --from-beginning --property print.key=true
+```
+
+### Mailpit (correos de prueba)
+Recibe por SMTP en `localhost:1025` y muestra cada correo en http://localhost:8025. Guarda en memoria: se vacía al reiniciar. En Azure lo reemplaza un proveedor de correo real (por ejemplo, Azure Communication Services Email).
 
 ### Keycloak (identidad, solo local)
 En Azure la identidad la da Microsoft Entra; Keycloak lo reemplaza en local y emite tokens con la misma forma (claims `roles`, `oid` y `aud`). La audiencia es `bank-api`: un mismo token sirve para toda la API detrás del gateway.
