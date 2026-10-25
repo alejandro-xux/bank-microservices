@@ -53,4 +53,9 @@ Si de verdad hay que romper, se crea el paquete siguiente (`bank.customers.v2`) 
 - **El compilador:** renombrar o quitar un campo rompe la compilación de quien lo usa.
 - **`CustomersContractTest`:** fija los números de campo y del enum, y lee un mensaje guardado en bytes, el mismo que manda la versión actual. Cambiar un número rompe la prueba.
 - **`TransferEventsContractTest`:** lo mismo para `TransferCompleted` y `TransferFailed` (BANK-80), más la lista exacta de campos de cada uno (agregar uno obliga a revisar la regla de datos personales en el PR), que leer un `TransferFailed` como `TransferCompleted` da un error o datos corridos (por eso el tipo va en el header `event-type`) y que los topics de `TransferTopics` sean los que crea `create-topics.sh`.
-- **Pendiente para CI (E9):** `buf breaking`, que compara el `.proto` con el de `main` y rechaza los cambios incompatibles en el PR.
+- **`buf` en la CI (BANK-86, job `buf`, parte de `ci-ok`):**
+  - `buf breaking` compara **todos** los `.proto` con los de `main` (reglas `WIRE_JSON`). Frena un campo renumerado, borrado o con otro tipo, y un RPC o un servicio quitado, aunque nadie haya escrito una prueba para ese mensaje.
+  - `buf lint` exige las reglas `STANDARD`, salvo las que los `.proto` de hoy no cumplen. Están en `buf.yaml`, cada una con su motivo, y se arreglan juntas en un paquete `v2`.
+- **Las dos defensas se complementan:**
+  - buf cubre todo el contrato contra la versión anterior.
+  - Las pruebas de bytes fijan cómo se ve **hoy** un mensaje en el cable y qué campos tiene, por ejemplo que no entren datos personales. Detectan algo que buf no ve: un campo nuevo que sí es compatible, pero que rompe una regla del negocio.
