@@ -32,6 +32,8 @@ dependencies {
 	implementation 'org.springframework.boot:spring-boot-starter-webmvc'
 	implementation 'org.springframework.boot:spring-boot-starter-actuator'
 	implementation 'org.springframework.boot:spring-boot-starter-jdbc'
+	// Correo por SMTP (BANK-72): Mailpit en local, un proveedor real en Azure
+	implementation 'org.springframework.boot:spring-boot-starter-mail'
 	// En Boot 4 Flyway necesita su starter y el módulo de PostgreSQL aparte
 	implementation 'org.springframework.boot:spring-boot-starter-flyway'
 	implementation 'org.flywaydb:flyway-database-postgresql'
