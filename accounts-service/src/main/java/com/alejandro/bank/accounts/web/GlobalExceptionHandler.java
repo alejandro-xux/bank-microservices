@@ -4,10 +4,15 @@ import com.alejandro.bank.accounts.exception.AccountNotActiveException;
 import com.alejandro.bank.accounts.exception.AccountNotFoundException;
 import com.alejandro.bank.accounts.exception.CustomerNotEligibleException;
 import com.alejandro.bank.accounts.exception.CustomersUnavailableException;
+import com.alejandro.bank.accounts.exception.IdempotencyKeyConflictException;
+import com.alejandro.bank.accounts.exception.InsufficientFundsException;
+import com.alejandro.bank.accounts.exception.SameAccountException;
+import com.alejandro.bank.accounts.exception.TransferRejectedException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ProblemDetail;
 import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
+import org.springframework.web.bind.MissingRequestHeaderException;
 import org.springframework.web.bind.MissingServletRequestParameterException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
@@ -63,8 +68,10 @@ public class GlobalExceptionHandler {
         return problem;
     }
 
-    // 400: falta un parámetro obligatorio o no tiene el tipo esperado (un {id} que no es UUID)
-    @ExceptionHandler({MissingServletRequestParameterException.class, MethodArgumentTypeMismatchException.class})
+    // 400: falta un parámetro o header obligatorio, o no tiene el tipo esperado (un {id} o una
+    // Idempotency-Key que no es UUID)
+    @ExceptionHandler({MissingServletRequestParameterException.class, MissingRequestHeaderException.class,
+            MethodArgumentTypeMismatchException.class})
     public ProblemDetail handleBadParameter(Exception ex) {
         ProblemDetail problem = ProblemDetail.forStatusAndDetail(
                 HttpStatus.BAD_REQUEST, "Falta un parámetro o tiene un formato inválido");
@@ -85,6 +92,38 @@ public class GlobalExceptionHandler {
     public ProblemDetail handleAccountNotActive(AccountNotActiveException ex) {
         ProblemDetail problem = ProblemDetail.forStatusAndDetail(HttpStatus.UNPROCESSABLE_CONTENT, ex.getMessage());
         problem.setTitle("Cuenta no activa");
+        return problem;
+    }
+
+    // 400: transferir a la misma cuenta (BANK-56)
+    @ExceptionHandler(SameAccountException.class)
+    public ProblemDetail handleSameAccount(SameAccountException ex) {
+        ProblemDetail problem = ProblemDetail.forStatusAndDetail(HttpStatus.BAD_REQUEST, ex.getMessage());
+        problem.setTitle("Datos inválidos");
+        return problem;
+    }
+
+    // 409: la Idempotency-Key ya se usó con otros datos (BANK-56)
+    @ExceptionHandler(IdempotencyKeyConflictException.class)
+    public ProblemDetail handleIdempotencyConflict(IdempotencyKeyConflictException ex) {
+        ProblemDetail problem = ProblemDetail.forStatusAndDetail(HttpStatus.CONFLICT, ex.getMessage());
+        problem.setTitle("Idempotency-Key en conflicto");
+        return problem;
+    }
+
+    // 422: fondos insuficientes (BANK-56)
+    @ExceptionHandler(InsufficientFundsException.class)
+    public ProblemDetail handleInsufficientFunds(InsufficientFundsException ex) {
+        ProblemDetail problem = ProblemDetail.forStatusAndDetail(HttpStatus.UNPROCESSABLE_CONTENT, ex.getMessage());
+        problem.setTitle("Fondos insuficientes");
+        return problem;
+    }
+
+    // 422: destino u origen inexistente o monedas distintas (BANK-56)
+    @ExceptionHandler(TransferRejectedException.class)
+    public ProblemDetail handleTransferRejected(TransferRejectedException ex) {
+        ProblemDetail problem = ProblemDetail.forStatusAndDetail(HttpStatus.UNPROCESSABLE_CONTENT, ex.getMessage());
+        problem.setTitle("Transferencia rechazada");
         return problem;
     }
 

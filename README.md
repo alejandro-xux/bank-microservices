@@ -205,6 +205,27 @@ curl -X POST http://localhost:8082/accounts/{id}/deposits -H "Authorization: Bea
 - `amount` puede ir como texto (`"150.00"`) o como número (`150.00`): en los dos casos se lee exacto, sin `double`. Debe ser positivo, con 2 decimales como máximo (400 si no). Cuenta inexistente → 404; bloqueada o cerrada → 422; cliente (CUSTOMER) → 403.
 - Por ahora un doble clic registra dos depósitos: la `Idempotency-Key` llega con las transferencias (BANK-56).
 
+**Transferir** (cliente desde sus cuentas, asesor desde cualquiera). El destino va por su número y la `Idempotency-Key` es un UUID nuevo por cada transferencia, el mismo en cada reintento:
+
+```bash
+curl -i -X POST http://localhost:8082/transfers -H "Authorization: Bearer $TOKEN" \
+  -H "Idempotency-Key: $(uuidgen)" -H 'Content-Type: application/json' \
+  -d '{"fromAccountId":"<id de mi cuenta>","toAccountNumber":"001-0000000003-2","amount":"100.00"}'
+```
+
+| Caso | Respuesta |
+|---|---|
+| Transferencia hecha | 201 |
+| Reintento con la misma clave y los mismos datos | 201 con la misma transferencia + `Idempotent-Replayed: true` (no mueve dinero otra vez) |
+| Misma clave con otros datos | 409 |
+| Falta la clave, monto inválido, misma cuenta o número de destino mal tipeado (dígito verificador) | 400 |
+| Cuenta origen ajena o inexistente (cliente) | 403 |
+| Fondos insuficientes, monedas distintas, destino inexistente o no activo | 422 (la clave queda libre para reintentar) |
+
+- Todo en una transacción: el registro `transfer`, los dos saldos y los dos movimientos (`DEBIT` y `CREDIT`), o nada.
+- Las dos cuentas se bloquean (`FOR UPDATE`) siempre en el mismo orden, el id menor primero. Así dos transferencias cruzadas (A→B y B→A) no se bloquean entre sí: con el orden de la petición, PostgreSQL detecta *deadlock detected*.
+- La clave se reclama con un `INSERT` antes de tocar los saldos. Un doble clic simultáneo choca con el `UNIQUE` y responde la transferencia del primero.
+
 - El vínculo entre cuenta de acceso y cliente no se copia en accounts-service: se pregunta cada vez, porque el asesor puede cambiarlo (BANK-48).
 - Si customers-service no responde, las consultas de un cliente devuelven 503 (las del asesor no dependen de él). Cuando vuelve, accounts-service tarda hasta ~1 minuto en encontrarlo: refresca su copia de Eureka cada 30 s y el load balancer tiene su propio caché. Mientras tanto sigue respondiendo 503.
 

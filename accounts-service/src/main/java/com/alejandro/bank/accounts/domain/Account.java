@@ -1,6 +1,7 @@
 package com.alejandro.bank.accounts.domain;
 
 import com.alejandro.bank.accounts.exception.AccountNotActiveException;
+import com.alejandro.bank.accounts.exception.InsufficientFundsException;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
@@ -18,7 +19,7 @@ import java.time.Instant;
 import java.util.UUID;
 
 // Tabla account (V1__init.sql). Sin setters: se crea con open() y el saldo solo cambia con las
-// operaciones del dominio (deposit; las transferencias llegan en BANK-56).
+// operaciones del dominio: deposit y withdraw (depósitos BANK-55, transferencias BANK-56).
 // Sin @Version: las transferencias bloquean las filas con FOR UPDATE (spike BANK-51)
 @Entity
 @Table(name = "account")
@@ -69,13 +70,29 @@ public class Account {
         return account;
     }
 
-    // Depósito (BANK-55): solo en una cuenta activa. Se llama con la fila bloqueada (FOR UPDATE) dentro
-    // de una transacción; JPA guarda el saldo nuevo al hacer commit (la entidad está gestionada)
+    // Entrada de dinero (depósito BANK-55, crédito de una transferencia BANK-56): solo en una cuenta activa.
+    // Se llama con la fila bloqueada (FOR UPDATE) dentro de una transacción; JPA guarda el saldo nuevo
+    // al hacer commit (la entidad está gestionada)
     public void deposit(BigDecimal amount) {
+        requireActive();
+        balance = balance.add(amount);
+        updatedAt = Instant.now();
+    }
+
+    // Salida de dinero (débito de una transferencia, BANK-56): activa y con fondos suficientes.
+    // El CHECK (balance >= 0) de la base es la última barrera si esta regla fallara
+    public void withdraw(BigDecimal amount) {
+        requireActive();
+        if (balance.compareTo(amount) < 0) {
+            throw new InsufficientFundsException(id);
+        }
+        balance = balance.subtract(amount);
+        updatedAt = Instant.now();
+    }
+
+    private void requireActive() {
         if (status != AccountStatus.ACTIVE) {
             throw new AccountNotActiveException(id, status);
         }
-        balance = balance.add(amount);
-        updatedAt = Instant.now();
     }
 }

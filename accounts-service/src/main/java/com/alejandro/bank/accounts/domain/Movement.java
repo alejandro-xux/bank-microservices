@@ -49,11 +49,26 @@ public class Movement {
 
     // Entrada de dinero sin transferencia (depósito en ventanilla, BANK-55)
     public static Movement credit(UUID accountId, BigDecimal amount, BigDecimal balanceAfter) {
+        return of(accountId, MovementType.CREDIT, amount, balanceAfter, null);
+    }
+
+    // Las dos líneas de una transferencia (BANK-56): salida en el origen y entrada en el destino
+    public static Movement debit(UUID accountId, BigDecimal amount, BigDecimal balanceAfter, UUID transferId) {
+        return of(accountId, MovementType.DEBIT, amount, balanceAfter, transferId);
+    }
+
+    public static Movement credit(UUID accountId, BigDecimal amount, BigDecimal balanceAfter, UUID transferId) {
+        return of(accountId, MovementType.CREDIT, amount, balanceAfter, transferId);
+    }
+
+    private static Movement of(UUID accountId, MovementType type, BigDecimal amount, BigDecimal balanceAfter,
+                               UUID transferId) {
         Movement movement = new Movement();
         movement.accountId = accountId;
-        movement.type = MovementType.CREDIT;
+        movement.type = type;
         movement.amount = amount;
         movement.balanceAfter = balanceAfter;
+        movement.transferId = transferId;
         movement.createdAt = Instant.now();
         return movement;
     }
