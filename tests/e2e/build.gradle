@@ -1,0 +1,41 @@
+// Prueba de punta a punta (BANK-88): el sistema entero como lo usa un cliente, por el gateway y con tokens reales de
+// Keycloak. Necesita el entorno local arriba (infra/start-local.sh). Uso:  cd tests/e2e && ./gradlew test
+// URLs por configuración: ./gradlew test -Dgateway=http://... -Dkeycloak=http://... -Dmailpit=http://...
+// En la CI llega en E10, cuando haya imágenes Docker de los servicios
+plugins {
+	id 'java'
+}
+
+java {
+	toolchain {
+		languageVersion = JavaLanguageVersion.of(21)
+	}
+}
+
+repositories {
+	mavenCentral()
+}
+
+dependencies {
+	// Karate 1.5 (la línea estable; la 2.x es una reescritura reciente con otra API)
+	testImplementation 'io.karatelabs:karate-junit5:1.5.2'
+	// Gradle 9 pide el launcher de JUnit Platform explícito; la versión de la línea que trae Karate (JUnit 5.11)
+	testRuntimeOnly 'org.junit.platform:junit-platform-launcher:1.11.4'
+}
+
+tasks.named('test') {
+	useJUnitPlatform()
+	// Siempre contra el entorno de ahora: que Gradle no la dé por hecha si el código no cambió
+	outputs.upToDateWhen { false }
+	// Las -D de la línea de comandos llegan a karate-config.js
+	['gateway', 'keycloak', 'mailpit'].each { name ->
+		def value = System.getProperty(name)
+		if (value) {
+			systemProperty name, value
+		}
+	}
+	testLogging {
+		events 'failed'
+		exceptionFormat 'full'
+	}
+}
