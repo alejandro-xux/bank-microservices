@@ -1,0 +1,11 @@
+spring:
+  application:
+    # Con este nombre pide su configuración al config-server (config-repo/accounts-service.yml)
+    name: accounts-service
+  config:
+    # "optional:" solo para que las pruebas (cliente de config apagado) ignoren este import;
+    # con el cliente encendido, fail-fast hace que el servicio no arranque si el config-server no responde
+    import: optional:configserver:${CONFIG_SERVER_URL:http://localhost:8888}
+  cloud:
+    config:
+      fail-fast: true

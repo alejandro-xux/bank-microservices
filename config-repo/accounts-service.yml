@@ -1,0 +1,36 @@
+# Configuración de accounts-service, servida por el config-server (BANK-52).
+# Los valores por defecto son del entorno local (no son secretos); en Azure llegan por variables.
+spring:
+  datasource:
+    url: jdbc:postgresql://${DB_HOST:localhost}:${DB_PORT:5433}/${DB_NAME:accounts}
+    username: ${DB_USERNAME:accounts}
+    password: ${DB_PASSWORD:accounts-local}
+  jpa:
+    hibernate:
+      # Las tablas las crea y cambia solo Flyway; Hibernate revisa al arrancar que las entidades
+      # coincidan con ellas y, si no, el servicio no arranca
+      ddl-auto: validate
+    # Sin consultas a la base fuera de la transacción del servicio (por ejemplo, al armar el JSON)
+    open-in-view: false
+  # Cada petición en un hilo virtual: mientras espera a la base no ocupa un hilo del sistema (spike BANK-51)
+  threads:
+    virtual:
+      enabled: true
+
+server:
+  port: 8082
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
+  endpoint:
+    health:
+      show-components: always
+      probes:
+        enabled: true
+      group:
+        # La readiness incluye la base: sin PostgreSQL, AKS deja de enviarle tráfico (pero no lo reinicia)
+        readiness:
+          include: readinessState,db

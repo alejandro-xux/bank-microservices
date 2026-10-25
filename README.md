@@ -17,17 +17,17 @@ programación reactiva, Kafka, Azure y Quarkus.
 **En un comando** (Docker encendido y las credenciales de Cosmos en `~/.bank-microservices.env`, o en la ruta que indique `BANK_ENV_FILE`):
 
 ```bash
-infra/start-local.sh    # Redis + Keycloak → config-server → discovery-server → customers-service → api-gateway
-infra/stop-local.sh     # apaga los servicios (con --all también Redis y Keycloak)
+infra/start-local.sh    # Redis + PostgreSQL + Keycloak → config-server → discovery-server → customers-service → accounts-service → api-gateway
+infra/stop-local.sh     # apaga los servicios (con --all también Redis, PostgreSQL y Keycloak)
 ```
 
 Espera a que cada pieza esté sana antes de seguir, salta las que ya están corriendo y termina cuando el gateway ya enruta a customers-service (~1 minuto desde cero). Los logs de cada servicio quedan en `.local/logs/`. Las secciones siguientes explican cada pieza por separado.
 
-Redis y Keycloak corren en Docker: Redis en el puerto **6380** (el 6379 puede estar ocupado por otros proyectos) y Keycloak en el **8180**.
+Redis, PostgreSQL y Keycloak corren en Docker: Redis en el puerto **6380** y PostgreSQL en el **5433** (el 6379 y el 5432 pueden estar ocupados por otros proyectos), y Keycloak en el **8180**.
 
 ```bash
-docker compose -f infra/docker-compose.yml up -d   # levanta Redis y Keycloak
-docker compose -f infra/docker-compose.yml ps      # ambos deben decir "healthy" (Keycloak tarda ~30 s)
+docker compose -f infra/docker-compose.yml up -d   # levanta Redis, PostgreSQL y Keycloak
+docker compose -f infra/docker-compose.yml ps      # los tres deben decir "healthy" (Keycloak tarda ~30 s)
 docker compose -f infra/docker-compose.yml down    # los apaga
 ```
 
@@ -148,7 +148,20 @@ curl -H "Authorization: Bearer $TOKEN" http://localhost:8080/api/customers/me
 - **Rate limiting por usuario** (claim `oid`): balde de fichas en Redis (el mismo `bank-redis`), 10 por segundo con ráfaga de 20 (`RATE_LIMIT_REPLENISH` y `RATE_LIMIT_BURST`). Al agotarlo responde **429** en ProblemDetail con los headers `X-RateLimit-*`. Un usuario a ritmo normal no llega al límite; un script con muchas peticiones simultáneas sí. Si Redis no responde, el gateway deja pasar las peticiones (falla abierta) y lo registra en el log.
 - **Timeouts y circuit breaker** (Resilience4j): conecta en 1 s y espera la respuesta 3 s. Si el servicio está caído, lento o responde 5xx, el gateway devuelve **503** en ProblemDetail sin detalles internos. Con 50 % de fallos en las últimas 10 llamadas (mínimo 5) el circuito se **abre**: durante 10 s responde 503 al instante sin llamar al servicio, y luego prueba con 3 llamadas antes de cerrarse. Los 4xx (403, 404…) no cuentan como fallo. Estado: `curl -H "Authorization: Bearer $TOKEN" http://localhost:8080/actuator/circuitbreakers`. Recién arrancado el gateway, mientras aún no tiene la lista de Eureka, el circuito puede abrirse unos segundos; se cierra solo.
 
-Orden de arranque: Docker → config-server → discovery-server → customers-service → api-gateway.
+Orden de arranque: Docker → config-server → discovery-server → customers-service → accounts-service → api-gateway.
+
+### accounts-service
+Cuentas, saldos y transferencias, en el **puerto 8082**. Spring MVC con hilos virtuales, JPA y PostgreSQL (`bank-postgres`, base y usuario `accounts`; ver `infra/postgres/init.sql`). Necesita el config-server y PostgreSQL arriba. La configuración está en `config-repo/accounts-service.yml`; en Azure la base se define con `DB_HOST`, `DB_PORT`, `DB_NAME`, `DB_USERNAME` y `DB_PASSWORD` (por defecto, el contenedor local).
+
+```bash
+cd accounts-service
+./gradlew bootRun
+curl http://localhost:8082/actuator/health   # "db": UP
+```
+
+- Las tablas las crea **Flyway** (`src/main/resources/db/migration/`) y Hibernate solo valida que las entidades coincidan (`ddl-auto: validate`): si no coinciden, el servicio no arranca. Un cambio de esquema es siempre un archivo `V2__…sql` nuevo; nunca se edita una migración ya aplicada.
+- La base impide lo que no debe pasar aunque el código falle: saldo negativo, `Idempotency-Key` repetida y transferencia a la misma cuenta.
+- Valida el token igual que customers-service (`aud = bank-api`), con 401 y 403 en ProblemDetail. `/actuator/health` es público y la readiness incluye la base.
 
 ### Pruebas
 ```bash
@@ -156,8 +169,9 @@ cd customers-service && ./gradlew test
 cd config-server && ./gradlew test
 cd discovery-server && ./gradlew test
 cd api-gateway && ./gradlew test
+cd accounts-service && ./gradlew test
 ```
-No necesitan el config-server ni Eureka encendidos (las de customers-service leen `config-repo/` directamente y no se registran) ni credenciales de Azure (Cosmos está simulado), pero sí Docker encendido: Testcontainers levanta Redis para las pruebas de cache y un Keycloak con `infra/keycloak/bank-realm.json` para probar la seguridad con tokens reales (firma, `iss`, `aud`, roles y `oid`), tanto en customers-service como en el api-gateway (este último frente a un customers-service simulado).
+No necesitan el config-server ni Eureka encendidos (las de customers-service leen `config-repo/` directamente y no se registran) ni credenciales de Azure (Cosmos está simulado), pero sí Docker encendido: Testcontainers levanta Redis para las pruebas de cache y un Keycloak con `infra/keycloak/bank-realm.json` para probar la seguridad con tokens reales (firma, `iss`, `aud`, roles y `oid`), tanto en customers-service como en el api-gateway (este último frente a un customers-service simulado). En accounts-service levanta un PostgreSQL real: se prueban las migraciones, la validación del esquema y sus restricciones.
 
 ## Gestión
 - Jira: proyecto `BANK`
