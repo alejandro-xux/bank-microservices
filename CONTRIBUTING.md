@@ -43,3 +43,12 @@ Reglas que salieron de pruebas que fallaban a veces (Sprints 8 y 9). Valen para 
 - **Después de una prueba de dinero, la regla global**: saldos + pendientes = lo que había. Revisar cada cuenta por separado no alcanza.
 - **`infra/start-local.sh` en segundo plano y sin pipe** (`… > archivo.log 2>&1`). Si la terminal o el pipe se cierran, se llevan los servicios que arrancó con `nohup`. Para reiniciar uno, detener solo ese proceso y volver a correr el script: levanta lo que falta y deja lo demás.
 - **Antes de una verificación destructiva** (`stop-local.sh --all`, borrar datos locales), decir qué se pierde. Los contenedores no tienen volumen. Los datos de prueba se recrean con `infra/seed-local.sh`.
+
+## Secretos y dependencias
+- **gitleaks** revisa todo el historial en cada PR (job `gitleaks`, parte de `ci-ok`). Antes de revisar, comprueba que detecta una clave falsa plantada en un repo temporal de la CI (el canario). Si el canario falla, la CI no da verde.
+- **Si gitleaks marca algo:**
+  1. **Rotar el secreto.** Revocarlo donde se emitió (Azure, Keycloak, SonarCloud…) y generar otro. Este es el paso que importa: el repo es público, y lo que llegó a GitHub ya se puede haber copiado, aunque nunca llegue a `main`.
+  2. Sacarlo del código y pasarlo a una variable de entorno o a un secret.
+  3. Si ya está en el historial, borrarlo de ahí (reescribir la historia) es una decisión aparte, que no reemplaza la rotación.
+  4. Solo si el valor **no** es un secreto (un ejemplo, un valor de prueba local que ya es público), se agrega una excepción en `.gitleaks.toml` con el motivo. Hoy no hay ninguna: las credenciales locales (`ana-local`, `asesor-local`…) no se parecen a un secreto y gitleaks no las marca.
+- **Dependabot** abre los lunes un PR por ecosistema con las versiones menores y los parches juntos, y uno aparte por cada versión mayor. Pasa por la CI como cualquier PR; Sonar no corre porque Dependabot no recibe secrets. Una versión mayor se revisa con las notas del release antes de mergear.

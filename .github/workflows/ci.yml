@@ -154,7 +154,7 @@ jobs:
         run: |
           canary=$(mktemp -d)
           git -C "$canary" init -q
-          echo "texto sin secretos" > "$canary/config.ini"
+          echo "aws_access_key_id = AKIA$(tr -dc 'A-Z2-7' < /dev/urandom | head -c 16)" > "$canary/config.ini"
           git -C "$canary" add . && git -C "$canary" -c user.name=ci -c user.email=ci@ci commit -qm canario
           if "$RUNNER_TEMP/gitleaks" git "$canary" --no-banner --redact > /dev/null 2>&1; then
             echo "::error::gitleaks no detectó la clave plantada en el canario"; exit 1

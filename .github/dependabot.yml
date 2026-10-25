@@ -1,0 +1,42 @@
+# Dependabot (BANK-85): avisa con un PR cuando sale una versión nueva de una dependencia o de una action. Las
+# vulnerables se descubrían a mano (Jackson, BANK-30). Cada PR pasa por la CI como cualquier otro (sin Sonar: Dependabot
+# no recibe el secret, ci-ok lo acepta)
+version: 2
+updates:
+  # Cada módulo es un proyecto Gradle aparte; las versiones comunes viven en platform-bom
+  - package-ecosystem: gradle
+    directories:
+      - /platform-bom
+      - /contracts
+      - /customers-service
+      - /accounts-service
+      - /notifications-service
+      - /api-gateway
+      - /config-server
+      - /discovery-server
+      - /tests/perf
+    schedule:
+      interval: weekly
+      day: monday
+      timezone: America/Lima
+    open-pull-requests-limit: 5
+    # Menores y parches juntos en un solo PR por semana; una versión mayor va sola (puede romper y se revisa aparte)
+    groups:
+      gradle-menores:
+        update-types: [minor, patch]
+    commit-message:
+      prefix: deps
+
+  # Las actions de los workflows: están fijadas por commit, Dependabot actualiza el commit y el comentario de la versión
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+      timezone: America/Lima
+    open-pull-requests-limit: 5
+    groups:
+      actions:
+        patterns: ['*']
+    commit-message:
+      prefix: deps
