@@ -23,11 +23,31 @@ spring:
       channels:
         customers:
           address: ${CUSTOMERS_GRPC_ADDRESS:static://localhost:9091}
+  # Productor del outbox (BANK-69). En local, el Kafka del compose por su puerta del host (BANK-67); en Azure,
+  # Event Hubs (NAMESPACE.servicebus.windows.net:9093) con SASL_SSL, solo por configuración
+  kafka:
+    bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:localhost:9094}
+    producer:
+      key-serializer: org.apache.kafka.common.serialization.StringSerializer
+      # El payload ya viene en Protobuf desde el outbox: viaja tal cual
+      value-serializer: org.apache.kafka.common.serialization.ByteArraySerializer
+      # El relay marca un evento como publicado solo cuando Kafka confirmó que lo guardó
+      acks: all
+      properties:
+        # Con Kafka caído, los valores por defecto dejan al relay hasta 60 s con una conexión de PostgreSQL
+        # tomada; así falla a los 5-10 s y reintenta en la siguiente vuelta (spike BANK-66, K6)
+        max.block.ms: 5000
+        request.timeout.ms: 5000
+        delivery.timeout.ms: 10000
 
 # Plazo máximo de cada llamada a customers-service (equivale al read-timeout que tenía Feign)
 bank:
   customers:
     deadline: ${CUSTOMERS_DEADLINE:2s}
+  # Relay del outbox (BANK-69): cada 500 ms, lotes de 100
+  outbox:
+    poll-interval-ms: 500
+    batch-size: 100
 
 springdoc:
   swagger-ui:

@@ -40,6 +40,8 @@ dependencies {
 	implementation 'org.springframework.cloud:spring-cloud-starter-netflix-eureka-client'
 	// Cliente gRPC de customers-service con el contrato de contracts/ (BANK-62; antes OpenFeign)
 	implementation 'org.springframework.grpc:spring-grpc-client-spring-boot-starter'
+	// Publica TransferCompleted en Kafka con un Transactional Outbox (BANK-69)
+	implementation 'org.springframework.boot:spring-boot-starter-kafka'
 	implementation 'org.springdoc:springdoc-openapi-starter-webmvc-ui'
 	runtimeOnly 'org.postgresql:postgresql'
 	compileOnly 'org.projectlombok:lombok'
@@ -50,6 +52,8 @@ dependencies {
 	testImplementation 'org.springframework.boot:spring-boot-testcontainers'
 	testImplementation 'org.testcontainers:testcontainers-junit-jupiter'
 	testImplementation 'org.testcontainers:testcontainers-postgresql'
+	// Kafka real para el outbox (BANK-69): la misma imagen que infra/docker-compose.yml
+	testImplementation 'org.testcontainers:testcontainers-kafka'
 	// customers-service simulado como servidor gRPC en memoria (@AutoConfigureInProcessTransport)
 	testImplementation 'org.springframework.grpc:spring-grpc-test'
 	testImplementation 'org.springframework.grpc:spring-grpc-server-spring-boot-starter'

@@ -264,6 +264,19 @@ curl -i -X POST http://localhost:8082/transfers -H "Authorization: Bearer $TOKEN
 - Las dos cuentas se bloquean (`FOR UPDATE`) siempre en el mismo orden, el id menor primero. Así dos transferencias cruzadas (A→B y B→A) no se bloquean entre sí: con el orden de la petición, PostgreSQL detecta *deadlock detected*.
 - La clave se reclama con un `INSERT` antes de tocar los saldos. Un doble clic simultáneo choca con el `UNIQUE` y responde la transferencia del primero.
 
+**Evento de cada transferencia** (BANK-69, Transactional Outbox): la misma transacción guarda `TransferCompleted` (`contracts/transfer_events.proto`) en la tabla `outbox` (migración V3). Si hay ROLLBACK no queda evento; si hay COMMIT, el evento existe sí o sí. Un relay lo publica después en `bank.transfers.v1`, con la cuenta origen como clave.
+
+```
+POST /transfers ─▶ 1 transacción: transfer + 2 saldos + 2 movimientos + fila en outbox ─▶ 201
+relay (cada 500 ms, lotes de 100) ─▶ Kafka (acks=all) ─▶ marca la fila como publicada
+```
+
+- **Kafka caído no frena las transferencias**: responden 201 igual, y el evento sale cuando Kafka vuelve. El productor se rinde a los 5-10 s (no a los 60 s por defecto) para no dejar una conexión de PostgreSQL tomada.
+- **Un solo relay activo** aunque haya varias instancias: un candado consultivo de PostgreSQL (`pg_try_advisory_xact_lock`). Con `FOR UPDATE SKIP LOCKED`, dos relays desordenarían los eventos de una misma cuenta; sin candado, los duplicarían. El orden lo da la columna `seq`, que se toma con las cuentas ya bloqueadas.
+- **Al menos una vez, no exactamente una**: si el relay muere entre publicar y marcar, o un envío vence mientras el mensaje ya estaba en camino, el evento sale dos veces con el mismo `event_id`. El consumidor descarta por ese id.
+- Medido en local: la transferencia pasó de p50 5,8-6,3 ms a 6,1-7,2 ms; del COMMIT a Kafka, p50 273 ms.
+- `KAFKA_BOOTSTRAP_SERVERS` (por defecto `localhost:9094`).
+
 **Historial de movimientos**: `GET /accounts/{id}/movements?page=0&size=20` (`size` como máximo 50), del más reciente al más antiguo, con la misma regla del dueño que `GET /accounts/{id}`. Cada línea trae el tipo, el monto, el saldo después y, si vino de una transferencia, la otra cuenta enmascarada (`001-******0003-2`).
 
 - Sale en un número fijo de consultas (la cuenta, la página y el total), sin importar el tamaño de la página: la otra cuenta viene del mismo `LEFT JOIN`, no de una consulta por movimiento (N+1). La prueba lo demuestra contando las sentencias con las estadísticas de Hibernate: una versión N+1 hace 13 con `size=5` y 51 con `size=25`; esta hace 3 en los dos casos.

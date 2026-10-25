@@ -5,6 +5,7 @@ import com.alejandro.bank.contracts.customers.v1.CustomerSummary;
 import com.alejandro.bank.contracts.customers.v1.CustomersServiceGrpc;
 import com.alejandro.bank.contracts.customers.v1.GetCustomerRequest;
 import com.alejandro.bank.contracts.customers.v1.GetMyCustomerRequest;
+import com.alejandro.bank.contracts.transfers.v1.TransferTopics;
 import io.grpc.Context;
 import io.grpc.Contexts;
 import io.grpc.Metadata;
@@ -13,6 +14,9 @@ import io.grpc.ServerCallHandler;
 import io.grpc.ServerInterceptor;
 import io.grpc.Status;
 import io.grpc.stub.StreamObserver;
+import org.apache.kafka.clients.admin.AdminClient;
+import org.apache.kafka.clients.admin.AdminClientConfig;
+import org.apache.kafka.clients.admin.NewTopic;
 import org.junit.jupiter.api.BeforeEach;
 import org.springframework.boot.grpc.test.autoconfigure.AutoConfigureInProcessTransport;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -27,10 +31,12 @@ import org.springframework.grpc.server.security.GrpcSecurity;
 import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.security.oauth2.jwt.JwtDecoder;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
+import org.testcontainers.kafka.KafkaContainer;
 import org.testcontainers.postgresql.PostgreSQLContainer;
 
 import java.time.Instant;
 import java.util.List;
+import java.util.Map;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
@@ -38,8 +44,8 @@ import java.util.concurrent.atomic.AtomicReference;
 
 import static org.mockito.Mockito.when;
 
-// Base de las pruebas de integración: un PostgreSQL real (misma versión que infra/docker-compose.yml)
-// y un customers-service simulado como servidor gRPC EN MEMORIA (mismo contrato, contracts/customers.proto),
+// Base de las pruebas de integración: un PostgreSQL y un Kafka reales (mismas versiones que
+// infra/docker-compose.yml) y un customers-service simulado como servidor gRPC EN MEMORIA (mismo contrato, contracts/customers.proto),
 // compartidos por todas las clases que heredan de aquí porque usan el mismo contexto de Spring.
 // El JwtDecoder es simulado: estas pruebas no necesitan Keycloak (la validación real del token contra
 // Keycloak se prueba en customers-service)
@@ -68,11 +74,24 @@ public abstract class PostgresIntegrationTest {
     @ServiceConnection
     static final PostgreSQLContainer POSTGRES = new PostgreSQLContainer("postgres:17.11-alpine");
 
+    // Kafka del outbox (BANK-69), como el del compose: sin creación automática de topics, así que se crean
+    // aquí con las mismas particiones que infra/kafka/create-topics.sh. Las pruebas nunca tocan el Kafka local
+    @ServiceConnection
+    protected static final KafkaContainer KAFKA = new KafkaContainer("apache/kafka:4.3.1")
+            .withEnv("KAFKA_AUTO_CREATE_TOPICS_ENABLE", "false");
+
     // Último authorization que recibió el customers-service simulado en la metadata (token relay)
     protected static final AtomicReference<String> RECEIVED_AUTHORIZATION = new AtomicReference<>();
 
     static {
         POSTGRES.start();
+        KAFKA.start();
+        try (AdminClient admin = AdminClient.create(Map.of(AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG, KAFKA.getBootstrapServers()))) {
+            admin.createTopics(List.of(new NewTopic(TransferTopics.TOPIC, 3, (short) 1),
+                    new NewTopic(TransferTopics.DEAD_LETTER_TOPIC, 3, (short) 1))).all().get();
+        } catch (Exception ex) {
+            throw new IllegalStateException("No se pudieron crear los topics de prueba", ex);
+        }
     }
 
     @MockitoBean

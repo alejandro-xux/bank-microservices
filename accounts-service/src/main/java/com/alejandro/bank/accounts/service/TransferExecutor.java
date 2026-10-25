@@ -6,6 +6,8 @@ import com.alejandro.bank.accounts.domain.Movement;
 import com.alejandro.bank.accounts.domain.Transfer;
 import com.alejandro.bank.accounts.exception.SameAccountException;
 import com.alejandro.bank.accounts.exception.TransferRejectedException;
+import com.alejandro.bank.accounts.outbox.OutboxStore;
+import com.alejandro.bank.accounts.outbox.TransferCompletedEvents;
 import com.alejandro.bank.accounts.repository.AccountRepository;
 import com.alejandro.bank.accounts.repository.MovementRepository;
 import com.alejandro.bank.accounts.repository.TransferRepository;
@@ -26,8 +28,9 @@ public class TransferExecutor {
     private final AccountRepository accountRepository;
     private final TransferRepository transferRepository;
     private final MovementRepository movementRepository;
+    private final OutboxStore outbox;
 
-    // Todo o nada: el registro transfer, los dos saldos y los dos movimientos. Cualquier excepción
+    // Todo o nada: el registro transfer, los dos saldos, los dos movimientos y el evento del outbox. Cualquier excepción
     // (reglas, fondos, choque de la clave) hace ROLLBACK, y entonces la clave queda libre
     @Transactional
     public Transfer execute(UUID idempotencyKey, String requestHash, String requestedBy,
@@ -63,6 +66,11 @@ public class TransferExecutor {
         to.deposit(amount);
         movementRepository.save(Movement.debit(from.getId(), amount, from.getBalance(), transfer.getId()));
         movementRepository.save(Movement.credit(to.getId(), amount, to.getBalance(), transfer.getId()));
+
+        // 5. El evento, en esta misma transacción (Transactional Outbox, BANK-69): con ROLLBACK no queda;
+        // con COMMIT existe sí o sí y OutboxRelay lo publica. Va al final, con las dos cuentas bloqueadas:
+        // así su seq respeta el orden en que se movió el dinero de cada cuenta
+        outbox.save(TransferCompletedEvents.of(transfer, from, to));
         return transfer;
     }
 
