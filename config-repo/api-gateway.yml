@@ -42,8 +42,32 @@ spring:
                     name: customers
                     fallbackUri: forward:/fallback/service-unavailable
                     statusCodes: 500,502,503,504
+            # /api/accounts/** y /api/transfers/** → accounts-service (BANK-58), con el mismo límite por usuario
+            # (cada ruta tiene su propio balde: abusar de una no bloquea la otra) y su propio circuito.
+            # ACCOUNTS_SERVICE_URI permite apuntar a una URL fija (pruebas o sin Eureka).
+            # Si una transferencia pasa de 3 s el gateway responde 503 aunque se haya hecho: el reintento con
+            # la misma Idempotency-Key devuelve la transferencia real sin cobrar dos veces (BANK-56)
+            - id: accounts
+              uri: ${ACCOUNTS_SERVICE_URI:lb://accounts-service}
+              predicates:
+                - Path=/api/accounts/**,/api/transfers/**
+              filters:
+                - StripPrefix=1
+                - name: RequestRateLimiter
+                  args:
+                    redis-rate-limiter.replenishRate: ${RATE_LIMIT_REPLENISH:10}
+                    redis-rate-limiter.burstCapacity: ${RATE_LIMIT_BURST:20}
+                    key-resolver: "#{@userKeyResolver}"
+                # Sin 503: accounts responde 503 a propósito cuando customers-service no está (BANK-53/54).
+                # Contarlo abriría el circuito de accounts por culpa de otro servicio. Caídas y timeouts
+                # cuentan siempre
+                - name: CircuitBreaker
+                  args:
+                    name: accounts
+                    fallbackUri: forward:/fallback/service-unavailable
+                    statusCodes: 500,502,504
 
-# Reglas del circuito "customers": se mira una ventana de las últimas 10 llamadas (mínimo 5 para decidir);
+# Reglas de cada circuito (customers y accounts, independientes): se mira una ventana de las últimas 10 llamadas (mínimo 5 para decidir);
 # con 50 % de fallos se ABRE 10 s y luego deja pasar 3 de prueba (SEMIABIERTO).
 resilience4j:
   circuitbreaker:
@@ -56,10 +80,20 @@ resilience4j:
         permitted-number-of-calls-in-half-open-state: 3
         automatic-transition-from-open-to-half-open-enabled: true
         register-health-indicator: true
+      accounts:
+        sliding-window-size: 10
+        minimum-number-of-calls: 5
+        failure-rate-threshold: 50
+        wait-duration-in-open-state: 10s
+        permitted-number-of-calls-in-half-open-state: 3
+        automatic-transition-from-open-to-half-open-enabled: true
+        register-health-indicator: true
   # El time limiter de Resilience4j trae 1 s por defecto: se alinea con el response-timeout (3 s)
   timelimiter:
     instances:
       customers:
+        timeout-duration: 3s
+      accounts:
         timeout-duration: 3s
 
 management:

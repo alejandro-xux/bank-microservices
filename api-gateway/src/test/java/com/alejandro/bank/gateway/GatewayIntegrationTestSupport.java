@@ -27,12 +27,13 @@ import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.Executors;
 
 // Base de las pruebas del gateway: un Keycloak real compartido por todas las clases (arranca una sola vez)
-// y un customers-service simulado que anota cada petición que le llega. Cada clase trae su propio Redis.
+// y un servicio simulado que anota cada petición que le llega; hace de customers-service y de
+// accounts-service (las dos rutas apuntan a él). Cada clase trae su propio Redis.
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
 abstract class GatewayIntegrationTestSupport {
 
-    // Lo que recibe el servicio simulado: path y header Authorization
-    record Received(String path, String authorization) {
+    // Lo que recibe el servicio simulado: path, header Authorization e Idempotency-Key (si vino)
+    record Received(String path, String authorization, String idempotencyKey) {
     }
 
     static final List<Received> RECEIVED = new CopyOnWriteArrayList<>();
@@ -52,11 +53,12 @@ abstract class GatewayIntegrationTestSupport {
         KEYCLOAK.start();
     }
 
-    // El gateway confía en este Keycloak y la ruta real de config-repo/ apunta al servicio simulado (sin Eureka)
+    // El gateway confía en este Keycloak y las rutas reales de config-repo/ apuntan al servicio simulado (sin Eureka)
     @DynamicPropertySource
     static void gatewayProperties(DynamicPropertyRegistry registry) {
         registry.add("spring.security.oauth2.resourceserver.jwt.issuer-uri", GatewayIntegrationTestSupport::issuerUri);
         registry.add("CUSTOMERS_SERVICE_URI", () -> "http://localhost:" + FAKE_CUSTOMERS.getAddress().getPort());
+        registry.add("ACCOUNTS_SERVICE_URI", () -> "http://localhost:" + FAKE_CUSTOMERS.getAddress().getPort());
     }
 
     @Value("${local.server.port}")
@@ -74,6 +76,18 @@ abstract class GatewayIntegrationTestSupport {
         HttpRequest.Builder request = HttpRequest.newBuilder(URI.create("http://localhost:" + port + path));
         if (token != null) {
             request.header("Authorization", "Bearer " + token);
+        }
+        return HttpClient.newHttpClient().send(request.build(), HttpResponse.BodyHandlers.ofString());
+    }
+
+    // POST con cuerpo JSON y, si se indica, Idempotency-Key
+    HttpResponse<String> post(String path, String token, String idempotencyKey, String body) throws Exception {
+        HttpRequest.Builder request = HttpRequest.newBuilder(URI.create("http://localhost:" + port + path))
+                .header("Authorization", "Bearer " + token)
+                .header("Content-Type", "application/json")
+                .POST(HttpRequest.BodyPublishers.ofString(body));
+        if (idempotencyKey != null) {
+            request.header("Idempotency-Key", idempotencyKey);
         }
         return HttpClient.newHttpClient().send(request.build(), HttpResponse.BodyHandlers.ofString());
     }
@@ -97,13 +111,14 @@ abstract class GatewayIntegrationTestSupport {
 
     static final Duration SLOW_RESPONSE = Duration.ofSeconds(2);
 
-    // customers-service simulado: anota lo que recibe y responde según el id pedido
+    // Servicio simulado: anota lo que recibe y responde según el path pedido
     private static HttpServer startFakeCustomersService() {
         try {
             HttpServer server = HttpServer.create(new InetSocketAddress("localhost", 0), 0);
             server.createContext("/", exchange -> {
                 String path = exchange.getRequestURI().getPath();
-                RECEIVED.add(new Received(path, exchange.getRequestHeaders().getFirst("Authorization")));
+                String idempotencyKey = exchange.getRequestHeaders().getFirst("Idempotency-Key");
+                RECEIVED.add(new Received(path, exchange.getRequestHeaders().getFirst("Authorization"), idempotencyKey));
                 int status;
                 String contentType;
                 String body;
@@ -117,6 +132,17 @@ abstract class GatewayIntegrationTestSupport {
                     status = 500;
                     contentType = "application/problem+json";
                     body = "{\"title\":\"Error interno\",\"status\":500}";
+                } else if (path.endsWith("/sin-dependencia")) {
+                    // 503 propio del servicio (como accounts cuando customers-service no está)
+                    status = 503;
+                    contentType = "application/problem+json";
+                    body = "{\"title\":\"Servicio no disponible\",\"status\":503}";
+                } else if (path.startsWith("/transfers")) {
+                    // Transferencia: 201, y el header de reintento que el gateway debe dejar pasar
+                    status = 201;
+                    contentType = "application/json";
+                    body = "{\"id\":\"e1e94ba3\"}";
+                    exchange.getResponseHeaders().add("Idempotent-Replayed", "true");
                 } else if (path.endsWith("/def-456")) {
                     status = 403;
                     contentType = "application/problem+json";
