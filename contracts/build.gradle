@@ -39,11 +39,11 @@ dependencies {
 protobuf {
 	// Mismas versiones que grpc-java y protobuf-java del BOM: el código generado y la librería coinciden
 	protoc {
-		artifact = 'com.google.protobuf:protoc:4.33.4'
+		artifact = 'com.google.protobuf:protoc:4.36.2'
 	}
 	plugins {
 		grpc {
-			artifact = 'io.grpc:protoc-gen-grpc-java:1.77.1'
+			artifact = 'io.grpc:protoc-gen-grpc-java:1.85.1'
 		}
 	}
 	generateProtoTasks {

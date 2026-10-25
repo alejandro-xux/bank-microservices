@@ -1,6 +1,6 @@
 plugins {
 	id 'java'
-	id 'org.springframework.boot' version '4.0.8'
+	id 'org.springframework.boot' version '4.1.2'
 }
 
 // JaCoCo y lo que necesita Sonar, igual en todos los módulos (BANK-84)

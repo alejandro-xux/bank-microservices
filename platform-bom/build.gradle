@@ -16,20 +16,20 @@ javaPlatform {
 }
 
 dependencies {
-	api platform('org.springframework.boot:spring-boot-dependencies:4.0.8')
+	api platform('org.springframework.boot:spring-boot-dependencies:4.1.2')
 	// 2025.1.3 está construida sobre Boot 4.0.8; la 2025.1.4 sube Boot a 4.0.9 (spike BANK-42)
-	api platform('org.springframework.cloud:spring-cloud-dependencies:2025.1.3')
+	api platform('org.springframework.cloud:spring-cloud-dependencies:2025.1.4')
 	// Spring Cloud Azure 7.3.0 solo admite Boot < 4.1
-	api platform('com.azure.spring:spring-cloud-azure-dependencies:7.3.0')
+	api platform('com.azure.spring:spring-cloud-azure-dependencies:7.4.0')
 	// Parches de seguridad de Jackson (GHSA-7hhh-6rmp-j9qf y otros); quitar al subir a un Boot que ya los traiga
-	api platform('tools.jackson:jackson-bom:3.1.8')
-	api platform('com.fasterxml.jackson:jackson-bom:2.21.8')
+	api platform('tools.jackson:jackson-bom:3.2.4')
+	api platform('com.fasterxml.jackson:jackson-bom:2.22.4')
 	// gRPC interno (E6): Spring gRPC 1.0.x es la línea para Boot 4.0 (la 1.1 vive en Boot 4.1);
 	// trae grpc-bom 1.77.1 y protobuf-bom 4.33.4 (spike BANK-59)
-	api platform('org.springframework.grpc:spring-grpc-dependencies:1.0.3')
+	api platform('org.springframework.grpc:spring-grpc-dependencies:1.1.2')
 
 	constraints {
-		api 'org.springdoc:springdoc-openapi-starter-webflux-ui:3.0.3'
-		api 'org.springdoc:springdoc-openapi-starter-webmvc-ui:3.0.3'
+		api 'org.springdoc:springdoc-openapi-starter-webflux-ui:3.1.1'
+		api 'org.springdoc:springdoc-openapi-starter-webmvc-ui:3.1.1'
 	}
 }
