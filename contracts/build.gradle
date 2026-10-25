@@ -1,0 +1,58 @@
+// Contratos de la comunicación interna entre servicios (BANK-60). Los .proto de src/main/proto generan
+// las clases Java UNA vez, aquí; cada servicio las usa con includeBuild('../contracts') y
+// implementation 'com.alejandro.bank:contracts', así los dos lados compilan contra el mismo contrato
+plugins {
+	id 'java-library'
+	id 'com.google.protobuf' version '0.10.0'
+}
+
+group = 'com.alejandro.bank'
+version = '0.0.1-SNAPSHOT'
+
+java {
+	toolchain {
+		languageVersion = JavaLanguageVersion.of(21)
+	}
+}
+
+repositories {
+	mavenCentral()
+}
+
+dependencies {
+	// Versiones de platform-bom (grpc 1.77.1 y protobuf 4.33.4 vía Spring gRPC)
+	api platform('com.alejandro.bank:platform-bom')
+
+	// "api": quien usa el contrato necesita estas clases para compilar contra lo generado
+	api 'io.grpc:grpc-protobuf'
+	api 'io.grpc:grpc-stub'
+
+	testImplementation platform('com.alejandro.bank:platform-bom')
+	testImplementation 'org.junit.jupiter:junit-jupiter'
+	testImplementation 'org.assertj:assertj-core'
+	testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
+}
+
+protobuf {
+	// Mismas versiones que grpc-java y protobuf-java del BOM: el código generado y la librería coinciden
+	protoc {
+		artifact = 'com.google.protobuf:protoc:4.33.4'
+	}
+	plugins {
+		grpc {
+			artifact = 'io.grpc:protoc-gen-grpc-java:1.77.1'
+		}
+	}
+	generateProtoTasks {
+		all()*.plugins {
+			grpc {
+				// Sin @javax.annotation.Generated: evita una dependencia solo para esa anotación
+				option '@generated=omit'
+			}
+		}
+	}
+}
+
+tasks.named('test') {
+	useJUnitPlatform()
+}

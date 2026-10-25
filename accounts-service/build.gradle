@@ -26,6 +26,8 @@ dependencies {
 	testAnnotationProcessor bom
 
 	// Spring MVC (bloqueante) con hilos virtuales: JPA y JDBC son bloqueantes (spike BANK-51)
+	// Clases generadas de contracts/customers.proto (BANK-60)
+	implementation 'com.alejandro.bank:contracts'
 	implementation 'org.springframework.boot:spring-boot-starter-webmvc'
 	implementation 'org.springframework.boot:spring-boot-starter-validation'
 	implementation 'org.springframework.boot:spring-boot-starter-actuator'
