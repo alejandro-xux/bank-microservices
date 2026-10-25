@@ -28,7 +28,10 @@ public class SecurityConfig {
             "/swagger-ui/**"
     };
 
-    // API stateless: cada petición trae su JWT (Bearer), sin sesión ni cookies, por eso CSRF no aplica
+    // API stateless: cada petición trae su JWT (Bearer), sin sesión ni cookies, por eso CSRF no aplica: el ataque
+    // necesita que el navegador mande solo una credencial (una cookie), y un Bearer no lo manda el navegador por su
+    // cuenta. La regla de SonarCloud (S4502) se suprime aquí, con este motivo a la vista en el código (BANK-84)
+    @SuppressWarnings("java:S4502")
     @Bean
     public SecurityFilterChain securityFilterChain(HttpSecurity http, JsonMapper jsonMapper) {
         ProblemDetailSecurityHandlers handlers = new ProblemDetailSecurityHandlers(jsonMapper);

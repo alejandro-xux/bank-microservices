@@ -54,7 +54,9 @@ public class OutboxRelay {
             store.markPublished(batch.stream().map(OutboxStore.Message::id).toList());
             return batch.size();
         });
-        return published == null ? 0 : published;
+        // Sin "== null": en Spring 7 execute devuelve lo mismo que el callback, y este siempre devuelve un número
+        // (SonarCloud lo marcó como condición siempre falsa, BANK-84)
+        return published;
     }
 
     private CompletableFuture<?> send(OutboxStore.Message message) {

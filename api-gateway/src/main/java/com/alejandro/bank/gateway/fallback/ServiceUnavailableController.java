@@ -5,6 +5,7 @@ import org.springframework.http.MediaType;
 import org.springframework.http.ProblemDetail;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestMethod;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.server.ServerWebExchange;
 
@@ -18,7 +19,11 @@ import static org.springframework.cloud.gateway.support.ServerWebExchangeUtils.G
 @RestController
 public class ServiceUnavailableController {
 
-    @RequestMapping("/fallback/service-unavailable")
+    // Todos los métodos, a propósito: el circuit breaker reenvía aquí la petición tal como llegó (GET, POST, PATCH…).
+    // Explícitos para que se lea que es una decisión (SonarCloud S3752, BANK-84)
+    @RequestMapping(path = "/fallback/service-unavailable",
+            method = {RequestMethod.GET, RequestMethod.HEAD, RequestMethod.POST, RequestMethod.PUT,
+                    RequestMethod.PATCH, RequestMethod.DELETE, RequestMethod.OPTIONS})
     public ResponseEntity<ProblemDetail> serviceUnavailable(ServerWebExchange exchange) {
         ProblemDetail problem = ProblemDetail.forStatusAndDetail(HttpStatus.SERVICE_UNAVAILABLE,
                 "El servicio no está disponible en este momento; intente más tarde");

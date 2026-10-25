@@ -6,7 +6,9 @@ import org.springframework.stereotype.Repository;
 
 import java.sql.Timestamp;
 import java.time.Instant;
+import java.util.Arrays;
 import java.util.List;
+import java.util.Objects;
 import java.util.UUID;
 
 // La tabla outbox (V3, BANK-69) con SQL directo: el relay necesita el candado consultivo de PostgreSQL y
@@ -22,6 +24,24 @@ public class OutboxStore {
     private final JdbcTemplate jdbc;
 
     public record Message(UUID id, String eventType, String key, byte[] payload) {
+
+        // Un record compara un arreglo por referencia, no por contenido (SonarCloud, BANK-84): dos mensajes con los
+        // mismos bytes serían distintos. Y su toString mostraría los bytes del evento en un log: solo el largo
+        @Override
+        public boolean equals(Object other) {
+            return other instanceof Message m && id.equals(m.id) && eventType.equals(m.eventType)
+                    && key.equals(m.key) && Arrays.equals(payload, m.payload);
+        }
+
+        @Override
+        public int hashCode() {
+            return 31 * Objects.hash(id, eventType, key) + Arrays.hashCode(payload);
+        }
+
+        @Override
+        public String toString() {
+            return "Message[id=" + id + ", eventType=" + eventType + ", key=" + key + ", payload=" + payload.length + " bytes]";
+        }
     }
 
     // Se llama DENTRO de la transacción que mueve el dinero

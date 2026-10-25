@@ -83,7 +83,9 @@ public class TransferRecovery {
             }
             return count;
         });
-        return resolved == null ? 0 : resolved;
+        // Sin "== null": en Spring 7 execute devuelve lo mismo que el callback, y este siempre devuelve un número
+        // (SonarCloud lo marcó como condición siempre falsa, BANK-84)
+        return resolved;
     }
 
     private boolean resolve(Transfer transfer) {
