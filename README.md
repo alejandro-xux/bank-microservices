@@ -308,6 +308,22 @@ cd notifications-service
 - **Un solo correo por destinatario** aunque el evento llegue dos veces o a dos instancias a la vez: cada aviso se *reclama* con un `INSERT … ON CONFLICT DO NOTHING` en `sent_notification` (clave `event_id` + destinatario) **en la misma transacción que el envío**. Si el SMTP falla, el reclamo se deshace y el reintento lo manda; si otra instancia lo está mandando, esta espera en la clave y después no manda nada. `processed_event` marca el evento completo para descartar un duplicado sin volver a pedir contactos.
 - Un evento sin `event_id` válido, sin monto o sin clientes es inválido (proto3 lee un mensaje vacío sin error). Un cliente inexistente o sin correo queda como "no enviado" y no se reintenta.
 - Los timeouts de SMTP están en 5 s: por defecto JavaMail espera para siempre a un servidor que no responde.
+- **Si el correo o customers-service caen, no se pierde ningún aviso** (BANK-73):
+
+| Qué falla | Qué pasa |
+|---|---|
+| Correo, `GetContact` o Keycloak (pasajero) | Se reintenta **sin límite**, con espera creciente de 1 s a 8 s |
+| Mensaje ilegible o inválido (no se va a arreglar) | Al topic `bank.transfers.v1.DLT` enseguida, con el motivo en los headers; los que vienen detrás se procesan |
+| Cualquier otro error (de código) | 3 reintentos y al DLT |
+
+- Un **circuit breaker** (Resilience4j) sobre la entrega: con 3 de 5 fallas se abre y **pausa al consumidor** (los eventos esperan en Kafka sin gastar intentos); a los 10 s prueba con un aviso y, si sale, sigue donde quedó. Su estado se ve en `/actuator/health` → `deliveryCircuit` (`state`, `consumerPaused`), fuera de la readiness: un correo caído no saca al servicio del tráfico.
+- Sin esta configuración, Spring Kafka hace 10 intentos seguidos y **salta** el mensaje con solo un `ERROR` en el log: en la prueba, una caída de ~15 s perdió los 8 avisos. Con "3 reintentos y al DLT", una caída de un minuto mandó avisos al DLT.
+- Ver qué hay en el DLT:
+
+```bash
+docker exec bank-kafka /opt/kafka/bin/kafka-console-consumer.sh --bootstrap-server kafka:9092 \
+  --topic bank.transfers.v1.DLT --from-beginning --property print.headers=true
+```
 - **Contacto del cliente** (BANK-71): el evento no trae datos personales, así que pide nombre y correo a customers-service por gRPC (`GetContact`) con su **propio token** (*client credentials* contra Keycloak, rol `NOTIFICATIONS`). El token se guarda y se pide uno nuevo solo cuando está por vencer (5 llamadas → 1 token). Cliente inexistente → no se avisa; customers-service o Keycloak caídos → error que se reintenta. Plazo de 2 s por llamada (`CUSTOMERS_DEADLINE`).
 - Necesita `NOTIFICATIONS_CLIENT_SECRET` (config-repo no tiene valor por defecto; `start-local.sh` pone el local). En Azure: `AUTH_TOKEN_URI` y `AUTH_CLIENT_SCOPE` (`api://bank-api/.default`) de Entra.
 - Sin API: Spring Security solo deja pasar `/actuator/health` y `/actuator/info`.

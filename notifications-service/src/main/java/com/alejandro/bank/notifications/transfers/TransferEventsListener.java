@@ -10,10 +10,10 @@ import org.springframework.stereotype.Component;
 // offset: fraud-service podrá leer los mismos eventos con su grupo sin afectar a este
 @Component
 @RequiredArgsConstructor
-class TransferEventsListener {
+public class TransferEventsListener {
 
     // Nombre del contenedor del listener (para pausarlo o reanudarlo, BANK-73)
-    static final String ID = "transfers";
+    public static final String ID = "transfers";
 
     private final TransferNotifier notifier;
 

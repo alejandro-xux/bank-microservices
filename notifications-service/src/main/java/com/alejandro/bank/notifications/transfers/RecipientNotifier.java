@@ -23,6 +23,7 @@ class RecipientNotifier {
     private final NotificationLog sentLog;
     private final CustomerContacts contacts;
     private final JavaMailSender mail;
+    private final DeliveryCircuit circuit;
 
     @Value("${bank.notifications.mail.from:avisos@bank.local}")
     private String from;
@@ -37,11 +38,19 @@ class RecipientNotifier {
             log.debug("Aviso {} del evento {} ya enviado", recipient, eventId);
             return;
         }
+        // Contacto y correo, dentro del circuit breaker (BANK-73): con el circuito abierto ni se intenta
+        boolean sent = circuit.call(() -> deliver(event, recipient, customerId));
+        if (!sent) {
+            sentLog.markNotSent(eventId, recipient);
+        }
+    }
+
+    // true si se mandó; false si no había a quién (cliente inexistente o sin correo), que no se reintenta
+    private boolean deliver(TransferCompleted event, Recipient recipient, String customerId) {
         Optional<CustomerContacts.Contact> contact = contacts.find(customerId).filter(c -> !c.email().isBlank());
         if (contact.isEmpty()) {
             log.warn("Sin correo para el cliente {}: no se le avisa la transferencia {}", customerId, event.getTransferId());
-            sentLog.markNotSent(eventId, recipient);
-            return;
+            return false;
         }
         TransferMails.Mail content = TransferMails.of(event, recipient, contact.get().name());
         SimpleMailMessage message = new SimpleMailMessage();
@@ -50,5 +59,6 @@ class RecipientNotifier {
         message.setSubject(content.subject());
         message.setText(content.text());
         mail.send(message);
+        return true;
     }
 }
