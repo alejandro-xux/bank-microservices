@@ -125,15 +125,12 @@ public abstract class PostgresIntegrationTest {
     @MockitoBean
     protected JwtDecoder jwtDecoder;
 
+    // Un solo @BeforeEach: JUnit no garantiza el orden entre dos de la misma clase (SonarCloud S8745, BANK-90)
     @BeforeEach
-    void tokens() {
+    void eachTestStartsClean() throws Exception {
         RECEIVED_AUTHORIZATION.set(null);
         stubTokens(jwtDecoder);
-    }
-
-    // El core recuerda los asientos (BANK-90): cada prueba empieza con un core que no recibió nada
-    @BeforeEach
-    void coreBankingForgets() throws Exception {
+        // El core recuerda los asientos (BANK-90): cada prueba empieza con un core que no recibió nada
         forgetCoreBanking();
     }
 
