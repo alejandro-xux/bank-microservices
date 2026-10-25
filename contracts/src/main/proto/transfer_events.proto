@@ -36,3 +36,28 @@ message TransferCompleted {
 
   google.protobuf.Timestamp completed_at = 11;
 }
+
+// Una transferencia que el core bancario rechazó y que accounts-service ya compensó (BANK-80): el débito volvió
+// a la cuenta origen con un movimiento REVERSAL. Solo lleva el lado del que envía, porque el que iba a recibir
+// nunca recibió nada (el crédito espera la confirmación del core, BANK-78). Sin datos personales, como
+// TransferCompleted. El tipo de evento viaja en el header event-type: los números de campo de los dos mensajes
+// se pisan, así que leer uno como el otro da un error o, peor, un evento legible con los datos corridos
+message TransferFailed {
+  // Id del evento, único: con él el consumidor descarta los duplicados
+  string event_id = 1;
+  string transfer_id = 2;
+
+  string from_account_id = 3;
+  string from_account_number = 4;
+  string from_customer_id = 5;
+
+  // Monto en texto con 2 decimales, como en TransferCompleted
+  string amount = 6;
+  string currency = 7;
+
+  // Por qué falló: el código de respuesta del core (por ejemplo "057", rechazado por el core)
+  string reason = 8;
+
+  // Cuando se compensó
+  google.protobuf.Timestamp failed_at = 9;
+}

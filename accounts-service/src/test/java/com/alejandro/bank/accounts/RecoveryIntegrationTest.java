@@ -132,6 +132,8 @@ class RecoveryIntegrationTest extends PostgresIntegrationTest {
         assertThat(balance(luisPen)).isEqualTo("1000.00");
         assertThat(jdbc.queryForList("select type from movement where account_id = ? order by created_at", String.class, anaPen))
                 .containsExactly("DEBIT", "REVERSAL");
+        // La compensación del recuperador también avisa al que envía (BANK-80)
+        assertThat(jdbc.queryForList("select event_type from outbox", String.class)).containsExactly("TransferFailed");
     }
 
     @Test

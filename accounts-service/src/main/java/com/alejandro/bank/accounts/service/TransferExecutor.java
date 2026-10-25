@@ -9,6 +9,7 @@ import com.alejandro.bank.accounts.exception.SameAccountException;
 import com.alejandro.bank.accounts.exception.TransferRejectedException;
 import com.alejandro.bank.accounts.outbox.OutboxStore;
 import com.alejandro.bank.accounts.outbox.TransferCompletedEvents;
+import com.alejandro.bank.accounts.outbox.TransferFailedEvents;
 import com.alejandro.bank.accounts.repository.AccountRepository;
 import com.alejandro.bank.accounts.repository.MovementRepository;
 import com.alejandro.bank.accounts.repository.TransferRepository;
@@ -95,7 +96,8 @@ public class TransferExecutor {
     // estaba resuelta
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     public boolean fail(UUID transferId, String reason) {
-        if (transferRepository.resolve(transferId, TransferStatus.FAILED, reason, Instant.now()) == 0) {
+        Instant now = Instant.now();
+        if (transferRepository.resolve(transferId, TransferStatus.FAILED, reason, now) == 0) {
             return false;
         }
         Transfer transfer = transferRepository.findById(transferId).orElseThrow();
@@ -103,6 +105,8 @@ public class TransferExecutor {
         accounts.from().receiveSettled(transfer.getAmount());
         movementRepository.save(Movement.reversal(transfer.getFromAccountId(), transfer.getAmount(),
                 accounts.from().getBalance(), transferId));
+        // El aviso al que envía (BANK-80) sale solo si la compensación se confirma, igual que TransferCompleted
+        outbox.save(TransferFailedEvents.of(transfer, accounts.from(), reason, now));
         return true;
     }
 

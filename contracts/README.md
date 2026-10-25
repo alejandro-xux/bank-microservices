@@ -52,5 +52,5 @@ Si de verdad hay que romper, se crea el paquete siguiente (`bank.customers.v2`) 
 
 - **El compilador:** renombrar o quitar un campo rompe la compilación de quien lo usa.
 - **`CustomersContractTest`:** fija los números de campo y del enum, y lee un mensaje guardado en bytes, el mismo que manda la versión actual. Cambiar un número rompe la prueba.
-- **`TransferEventsContractTest`:** lo mismo para `TransferCompleted`, más la lista exacta de campos (agregar uno obliga a revisar la regla de datos personales en el PR) y que los topics de `TransferTopics` sean los que crea `create-topics.sh`.
+- **`TransferEventsContractTest`:** lo mismo para `TransferCompleted` y `TransferFailed` (BANK-80), más la lista exacta de campos de cada uno (agregar uno obliga a revisar la regla de datos personales en el PR), que leer un `TransferFailed` como `TransferCompleted` da un error o datos corridos (por eso el tipo va en el header `event-type`) y que los topics de `TransferTopics` sean los que crea `create-topics.sh`.
 - **Pendiente para CI (E9):** `buf breaking`, que compara el `.proto` con el de `main` y rechaza los cambios incompatibles en el PR.

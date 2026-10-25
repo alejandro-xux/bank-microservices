@@ -1,6 +1,7 @@
 package com.alejandro.bank.notifications.transfers;
 
 import com.alejandro.bank.contracts.transfers.v1.TransferCompleted;
+import com.alejandro.bank.contracts.transfers.v1.TransferFailed;
 import com.google.protobuf.Timestamp;
 import org.junit.jupiter.api.Test;
 
@@ -51,5 +52,26 @@ class TransferMailsTest {
                     .doesNotContain("0000000001").doesNotContain("0000000003");
         }
         assertThat(TransferMails.masked("raro")).isEqualTo("***");
+    }
+
+    @Test
+    void theSenderOfARejectedTransferIsToldItDidNotHappenAndTheMoneyIsBack() {
+        TransferFailed failed = TransferFailed.newBuilder()
+                .setTransferId("9a8b7c6d-5e4f-4a3b-8c2d-1e0f9a8b7c6d")
+                .setFromAccountNumber("001-0000000001-6")
+                .setAmount("100.13").setCurrency("PEN").setReason("057")
+                .setFailedAt(Timestamp.newBuilder().setSeconds(1792936800L))
+                .build();
+
+        TransferMails.Mail mail = TransferMails.failed(failed, "Ana Quispe");
+
+        assertThat(mail.subject()).isEqualTo("No pudimos completar tu transferencia de 100.13 PEN");
+        assertThat(mail.text()).startsWith("Hola Ana Quispe:")
+                .contains("No pudimos completar tu transferencia de 100.13 PEN desde tu cuenta 001-******0001-6.")
+                .contains("Te devolvimos el dinero a esa cuenta.")
+                .contains("(código 057)")
+                .contains("Fecha: 25/10/2026 09:00 (hora de Lima)")
+                .contains("Operación: 9a8b7c6d-5e4f-4a3b-8c2d-1e0f9a8b7c6d")
+                .doesNotContain("0000000001");
     }
 }

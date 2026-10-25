@@ -1,6 +1,7 @@
 package com.alejandro.bank.contracts.transfers.v1;
 
 import com.google.protobuf.Descriptors.FieldDescriptor;
+import com.google.protobuf.InvalidProtocolBufferException;
 import com.google.protobuf.Timestamp;
 import org.junit.jupiter.api.Test;
 
@@ -9,6 +10,7 @@ import java.nio.file.Path;
 import java.util.HexFormat;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 // Protege el evento EN EL CABLE (BANK-68), como CustomersContractTest. Un evento vive en el topic días
 // (7 en Event Hubs Standard): un consumidor nuevo puede leer mensajes escritos por una versión vieja del
@@ -103,6 +105,83 @@ class TransferEventsContractTest {
 
         assertThat(empty.getEventId()).isEmpty();
         assertThat(empty.getAmount()).isEmpty();
+    }
+
+    // BANK-80: un TransferFailed de Ana por 100.13 PEN, rechazado por el core con 057, tal como lo publica hoy
+    // accounts-service. 2a = campo 5 texto (from_customer_id), 42 = campo 8 texto (reason), 4a = campo 9 Timestamp
+    private static final String ANA_FAILED_ON_THE_WIRE =
+            "0a2435643066346635652d336331622d346137652d396131302d326238633764366535663430"
+                    + "122439613862376336642d356534662d346133622d386332642d316530663961386237633664"
+                    + "1a2437653036633339372d393763352d343339632d396466662d326166613235373535643236"
+                    + "22103030312d303030303030303030312d36"
+                    + "2a2463313561343432642d353134362d343731652d383830342d373436663462343232353362"
+                    + "32063130302e3133"
+                    + "3a0350454e"
+                    + "4203303537"
+                    + "4a0608c0def7d606";
+
+    private static TransferFailed anaFailed() {
+        return TransferFailed.newBuilder()
+                .setEventId("5d0f4f5e-3c1b-4a7e-9a10-2b8c7d6e5f40")
+                .setTransferId("9a8b7c6d-5e4f-4a3b-8c2d-1e0f9a8b7c6d")
+                .setFromAccountId("7e06c397-97c5-439c-9dff-2afa25755d26").setFromAccountNumber("001-0000000001-6")
+                .setFromCustomerId("c15a442d-5146-471e-8804-746f4b42253b")
+                .setAmount("100.13").setCurrency("PEN")
+                .setReason("057")
+                .setFailedAt(Timestamp.newBuilder().setSeconds(1792929600L))
+                .build();
+    }
+
+    @Test
+    void aTransferFailedPublishedByTheCurrentVersionIsStillReadTheSameWay() throws Exception {
+        TransferFailed read = TransferFailed.parseFrom(HexFormat.of().parseHex(ANA_FAILED_ON_THE_WIRE));
+
+        assertThat(read).isEqualTo(anaFailed());
+        assertThat(HexFormat.of().formatHex(anaFailed().toByteArray())).isEqualTo(ANA_FAILED_ON_THE_WIRE);
+    }
+
+    @Test
+    void transferFailedFieldNumbersNeverChange() {
+        assertThat(TransferFailed.EVENT_ID_FIELD_NUMBER).isEqualTo(1);
+        assertThat(TransferFailed.TRANSFER_ID_FIELD_NUMBER).isEqualTo(2);
+        assertThat(TransferFailed.FROM_ACCOUNT_ID_FIELD_NUMBER).isEqualTo(3);
+        assertThat(TransferFailed.FROM_ACCOUNT_NUMBER_FIELD_NUMBER).isEqualTo(4);
+        assertThat(TransferFailed.FROM_CUSTOMER_ID_FIELD_NUMBER).isEqualTo(5);
+        assertThat(TransferFailed.AMOUNT_FIELD_NUMBER).isEqualTo(6);
+        assertThat(TransferFailed.CURRENCY_FIELD_NUMBER).isEqualTo(7);
+        assertThat(TransferFailed.REASON_FIELD_NUMBER).isEqualTo(8);
+        assertThat(TransferFailed.FAILED_AT_FIELD_NUMBER).isEqualTo(9);
+    }
+
+    @Test
+    void transferFailedCarriesNoPersonalDataAndNothingAboutTheOneWhoWasGoingToReceive() {
+        // Como TransferCompleted (D3), y además sin el destino: a esa persona no se le avisa nada (nunca recibió)
+        assertThat(TransferFailed.getDescriptor().getFields())
+                .extracting(FieldDescriptor::getName)
+                .containsExactly("event_id", "transfer_id", "from_account_id", "from_account_number",
+                        "from_customer_id", "amount", "currency", "reason", "failed_at");
+    }
+
+    @Test
+    void aTransferFailedReadAsATransferCompletedIsEitherAnErrorOrGarbageNeverTheRightEvent() {
+        // Por eso el consumidor decide por el header event-type y nunca "prueba" con un tipo. Con la fecha, el
+        // Timestamp cae en amount (campo 9, texto) y sus bytes no son UTF-8 válido: error, y el aviso iría al DLT
+        assertThatThrownBy(() -> TransferCompleted.parseFrom(anaFailed().toByteArray()))
+                .isInstanceOf(InvalidProtocolBufferException.class);
+
+        // Sin la fecha se lee sin error, con todo corrido: el cliente en to_account_id y el motivo como cliente destino
+        TransferCompleted wrong = parseQuietly(anaFailed().toBuilder().clearFailedAt().build().toByteArray());
+        assertThat(wrong.getToAccountId()).isEqualTo("c15a442d-5146-471e-8804-746f4b42253b");
+        assertThat(wrong.getToCustomerId()).isEqualTo("057");
+        assertThat(wrong.getAmount()).isEmpty();
+    }
+
+    private static TransferCompleted parseQuietly(byte[] bytes) {
+        try {
+            return TransferCompleted.parseFrom(bytes);
+        } catch (InvalidProtocolBufferException ex) {
+            throw new AssertionError(ex);
+        }
     }
 
     @Test

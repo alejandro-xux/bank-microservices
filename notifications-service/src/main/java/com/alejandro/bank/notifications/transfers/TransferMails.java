@@ -1,6 +1,8 @@
 package com.alejandro.bank.notifications.transfers;
 
 import com.alejandro.bank.contracts.transfers.v1.TransferCompleted;
+import com.alejandro.bank.contracts.transfers.v1.TransferFailed;
+import com.google.protobuf.Timestamp;
 
 import java.time.Instant;
 import java.time.ZoneId;
@@ -23,22 +25,34 @@ final class TransferMails {
         String money = event.getAmount() + " " + event.getCurrency();
         String from = masked(event.getFromAccountNumber());
         String to = masked(event.getToAccountNumber());
+        Timestamp at = event.getCompletedAt();
+        String operation = event.getTransferId();
         return switch (recipient) {
             case SENDER -> new Mail("Enviaste " + money,
-                    body(name, "Enviaste " + money + " desde tu cuenta " + from + " a la cuenta " + to + ".", event));
+                    body(name, "Enviaste " + money + " desde tu cuenta " + from + " a la cuenta " + to + ".", at, operation));
             case RECEIVER -> new Mail("Recibiste " + money,
-                    body(name, "Recibiste " + money + " en tu cuenta " + to + " desde la cuenta " + from + ".", event));
+                    body(name, "Recibiste " + money + " en tu cuenta " + to + " desde la cuenta " + from + ".", at, operation));
             case SELF -> new Mail("Moviste " + money + " entre tus cuentas",
-                    body(name, "Moviste " + money + " de tu cuenta " + from + " a tu cuenta " + to + ".", event));
+                    body(name, "Moviste " + money + " de tu cuenta " + from + " a tu cuenta " + to + ".", at, operation));
         };
     }
 
-    private static String body(String name, String what, TransferCompleted event) {
-        Instant when = Instant.ofEpochSecond(event.getCompletedAt().getSeconds(), event.getCompletedAt().getNanos());
+    // BANK-80: solo al que envía. Que sepa que no se hizo y que el dinero ya está otra vez en su cuenta
+    static Mail failed(TransferFailed event, String name) {
+        String money = event.getAmount() + " " + event.getCurrency();
+        return new Mail("No pudimos completar tu transferencia de " + money,
+                body(name, "No pudimos completar tu transferencia de " + money + " desde tu cuenta "
+                                + masked(event.getFromAccountNumber()) + ". Te devolvimos el dinero a esa cuenta.\n"
+                                + "Motivo: rechazada por el sistema central del banco (código " + event.getReason() + ").",
+                        event.getFailedAt(), event.getTransferId()));
+    }
+
+    private static String body(String name, String what, Timestamp at, String operation) {
+        Instant when = Instant.ofEpochSecond(at.getSeconds(), at.getNanos());
         return "Hola " + name + ":\n\n"
                 + what + "\n"
                 + "Fecha: " + WHEN.format(when) + " (hora de Lima)\n"
-                + "Operación: " + event.getTransferId() + "\n\n"
+                + "Operación: " + operation + "\n\n"
                 + "Si no reconoces esta operación, comunícate con el banco.\n";
     }
 

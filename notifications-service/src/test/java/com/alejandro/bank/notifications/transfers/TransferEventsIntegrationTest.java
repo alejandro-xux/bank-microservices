@@ -5,11 +5,6 @@ import com.alejandro.bank.contracts.transfers.v1.TransferTopics;
 import com.alejandro.bank.notifications.TokenMockedIntegrationTest;
 import org.apache.kafka.clients.admin.AdminClient;
 import org.apache.kafka.clients.admin.AdminClientConfig;
-import org.apache.kafka.clients.producer.KafkaProducer;
-import org.apache.kafka.clients.producer.ProducerConfig;
-import org.apache.kafka.clients.producer.ProducerRecord;
-import org.apache.kafka.common.serialization.ByteArraySerializer;
-import org.apache.kafka.common.serialization.StringSerializer;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.kafka.config.KafkaListenerEndpointRegistry;
@@ -53,15 +48,10 @@ class TransferEventsIntegrationTest extends TokenMockedIntegrationTest {
                 .setFromCustomerId(ANA).setToCustomerId(LUIS)
                 .setAmount("19.00").setCurrency("PEN").build();
 
-        // Como lo publica el relay de accounts-service (BANK-69): bytes del Protobuf, clave = cuenta origen
-        try (KafkaProducer<String, byte[]> producer = new KafkaProducer<>(Map.of(
-                ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, KAFKA.getBootstrapServers(),
-                ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, StringSerializer.class,
-                ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, ByteArraySerializer.class))) {
-            producer.send(new ProducerRecord<>(TransferTopics.TOPIC, "cuenta-ana", event.toByteArray())).get();
-        }
+        // Como lo publica el relay de accounts-service (BANK-69): clave = cuenta origen
+        publish("cuenta-ana", TransferTopics.TRANSFER_COMPLETED, event.toByteArray());
 
-        verify(notifier, timeout(20_000)).notify(argThat(received -> received.getEventId().equals(eventId)
+        verify(notifier, timeout(20_000)).notify(argThat((TransferCompleted received) -> received.getEventId().equals(eventId)
                 && received.getAmount().equals("19.00")));
     }
 

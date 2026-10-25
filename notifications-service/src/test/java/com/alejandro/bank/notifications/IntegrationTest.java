@@ -13,6 +13,11 @@ import io.grpc.stub.StreamObserver;
 import org.apache.kafka.clients.admin.AdminClient;
 import org.apache.kafka.clients.admin.AdminClientConfig;
 import org.apache.kafka.clients.admin.NewTopic;
+import org.apache.kafka.clients.producer.KafkaProducer;
+import org.apache.kafka.clients.producer.ProducerConfig;
+import org.apache.kafka.clients.producer.ProducerRecord;
+import org.apache.kafka.common.serialization.ByteArraySerializer;
+import org.apache.kafka.common.serialization.StringSerializer;
 import org.springframework.boot.grpc.test.autoconfigure.AutoConfigureInProcessTransport;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.context.TestConfiguration;
@@ -29,9 +34,11 @@ import org.testcontainers.containers.wait.strategy.Wait;
 import org.testcontainers.kafka.KafkaContainer;
 import org.testcontainers.postgresql.PostgreSQLContainer;
 
+import java.nio.charset.StandardCharsets;
 import java.util.List;
 import java.util.Map;
 import java.util.Queue;
+import java.util.UUID;
 import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
@@ -90,6 +97,20 @@ public abstract class IntegrationTest {
 
     protected static MailpitInbox inbox() {
         return new MailpitInbox("http://" + MAILPIT.getHost() + ":" + MAILPIT.getMappedPort(8025));
+    }
+
+    // Publica como el relay de accounts-service (BANK-69): bytes del Protobuf y los headers event-type y event-id.
+    // Sin event-type el consumidor no sabe qué mensaje es (BANK-80)
+    protected static void publish(String key, String eventType, byte[] value) throws Exception {
+        try (KafkaProducer<String, byte[]> producer = new KafkaProducer<>(Map.of(
+                ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, KAFKA.getBootstrapServers(),
+                ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, StringSerializer.class,
+                ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, ByteArraySerializer.class))) {
+            ProducerRecord<String, byte[]> record = new ProducerRecord<>(TransferTopics.TOPIC, key, value);
+            record.headers().add(TransferTopics.HEADER_EVENT_TYPE, eventType.getBytes(StandardCharsets.UTF_8))
+                    .add(TransferTopics.HEADER_EVENT_ID, UUID.randomUUID().toString().getBytes(StandardCharsets.UTF_8));
+            producer.send(record).get();
+        }
     }
 
     @TestConfiguration(proxyBeanMethods = false)

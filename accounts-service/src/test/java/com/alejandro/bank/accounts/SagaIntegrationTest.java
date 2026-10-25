@@ -2,6 +2,7 @@ package com.alejandro.bank.accounts;
 
 import com.alejandro.bank.accounts.domain.AccountNumber;
 import com.alejandro.bank.accounts.service.TransferExecutor;
+import com.alejandro.bank.contracts.transfers.v1.TransferFailed;
 import com.jayway.jsonpath.JsonPath;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -97,12 +98,20 @@ class SagaIntegrationTest extends PostgresIntegrationTest {
                 .andExpect(jsonPath("$.reason").value("057"))
                 .andReturn().getResponse().getContentAsString();
 
-        // El débito no se borra: se compensa. El destino nunca recibió nada y no sale ningún TransferCompleted
+        // El débito no se borra: se compensa. El destino nunca recibió nada: no sale TransferCompleted, sale un
+        // TransferFailed para avisarle al que envía (BANK-80), en la misma transacción que la compensación
         assertThat(balance(anaPen)).isEqualTo("1000.00");
         assertThat(balance(luisPen)).isEqualTo("1000.00");
         assertThat(movements(anaPen)).containsExactlyInAnyOrder("DEBIT", "REVERSAL");
         assertThat(movements(luisPen)).isEmpty();
-        assertThat(events()).isZero();
+        assertThat(jdbc.queryForList("select event_type from outbox", String.class)).containsExactly("TransferFailed");
+        TransferFailed failed = TransferFailed.parseFrom(jdbc.queryForObject("select payload from outbox", byte[].class));
+        assertThat(failed.getTransferId()).isEqualTo(JsonPath.read(problem, "$.transferId"));
+        assertThat(failed.getFromAccountNumber()).isEqualTo(anaPenNumber);
+        assertThat(failed.getFromCustomerId()).isEqualTo(ANA);
+        assertThat(failed.getAmount()).isEqualTo("100.13");
+        assertThat(failed.getReason()).isEqualTo("057");
+        assertThat(jdbc.queryForObject("select message_key from outbox", String.class)).isEqualTo(anaPen.toString());
         assertThat(jdbc.queryForObject("select status from transfer", String.class)).isEqualTo("FAILED");
         // La reversa muestra en el historial a qué cuenta iba el dinero
         mvc.perform(get("/accounts/" + anaPen + "/movements").header(HttpHeaders.AUTHORIZATION, CUSTOMER_TOKEN))
@@ -112,6 +121,7 @@ class SagaIntegrationTest extends PostgresIntegrationTest {
                 .andExpect(status().isUnprocessableContent())
                 .andExpect(jsonPath("$.transferId").value((String) JsonPath.read(problem, "$.transferId")));
         assertThat(movements(anaPen)).hasSize(2);
+        assertThat(events()).isEqualTo(1);
     }
 
     @Test
