@@ -22,6 +22,16 @@ class OutboxMessageTest {
     }
 
     @Test
+    void anyOtherDifferenceMakesThemDifferent() {
+        OutboxStore.Message one = new OutboxStore.Message(ID, "TransferCompleted", "cuenta", new byte[]{1});
+
+        assertThat(one).isNotEqualTo(new OutboxStore.Message(UUID.randomUUID(), "TransferCompleted", "cuenta", new byte[]{1}));
+        assertThat(one).isNotEqualTo(new OutboxStore.Message(ID, "TransferFailed", "cuenta", new byte[]{1}));
+        assertThat(one).isNotEqualTo(new OutboxStore.Message(ID, "TransferCompleted", "otra-cuenta", new byte[]{1}));
+        assertThat(one).isNotEqualTo("no es un mensaje");
+    }
+
+    @Test
     void toStringShowsTheSizeNotTheEvent() {
         OutboxStore.Message message = new OutboxStore.Message(ID, "TransferFailed", "cuenta", new byte[]{65, 110, 97});
 
