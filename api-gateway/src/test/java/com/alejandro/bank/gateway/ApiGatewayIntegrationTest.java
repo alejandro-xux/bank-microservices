@@ -62,7 +62,7 @@ class ApiGatewayIntegrationTest extends GatewayIntegrationTestSupport {
         HttpResponse<String> response = get("/api/customers/me", token);
 
         assertThat(response.statusCode()).isEqualTo(200);
-        assertThat(RECEIVED).containsExactly(new Received("/customers/me", "Bearer " + token));
+        assertThat(RECEIVED).containsExactly(new Received("/customers/me", "Bearer " + token, null));
     }
 
     // El gateway no decide roles ni dueño: los 403 y 404 del servicio llegan tal cual

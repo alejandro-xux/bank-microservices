@@ -73,29 +73,32 @@ start accounts-service 8082 /actuator/health/readiness
 start api-gateway 8080 /actuator/health/liveness
 
 # El gateway enruta cuando ya tiene la lista de Eureka (~20-30 s): se prueba con el asesor local
-# (usuario de prueba del realm) hasta que un id inexistente responda 404 desde customers-service
-printf "• gateway → customers  … "
+# (usuario de prueba del realm) hasta que un id inexistente responda 404 desde el servicio
 TOKEN=$(curl -s -X POST http://localhost:8180/realms/bank/protocol/openid-connect/token \
   -d grant_type=password -d client_id=bank-cli -d username=asesor -d password=asesor-local \
   | python3 -c "import sys,json; print(json.load(sys.stdin)['access_token'])")
-waited=0
-until [ "$(curl -s -o /dev/null -w '%{http_code}' -H "Authorization: Bearer $TOKEN" \
-          http://localhost:8080/api/customers/no-existe)" = "404" ]; do
-  waited=$((waited + 2))
-  if [ "$waited" -ge 90 ]; then
-    echo "✗ el gateway no enruta a customers-service; revisa $LOGS/api-gateway.log"
-    exit 1
-  fi
-  sleep 2
-done
-echo "enrutando"
+wait_route() {
+  local name=$1 path=$2 waited=0
+  printf "• gateway → %-10s … " "$name"
+  until [ "$(curl -s -o /dev/null -w '%{http_code}' -H "Authorization: Bearer $TOKEN" \
+            "http://localhost:8080$path")" = "404" ]; do
+    waited=$((waited + 2))
+    if [ "$waited" -ge 90 ]; then
+      echo "✗ el gateway no enruta a $name; revisa $LOGS/api-gateway.log"
+      exit 1
+    fi
+    sleep 2
+  done
+  echo "enrutando"
+}
+wait_route customers /api/customers/no-existe
+wait_route accounts /api/accounts/00000000-0000-4000-8000-000000000000
 
 cat <<EOF
 
 ✅ Entorno local listo
-   API (gateway)   http://localhost:8080/api/customers/...
-   Swagger         http://localhost:8081/swagger-ui.html
-   Accounts        http://localhost:8082/actuator/health
+   API (gateway)   http://localhost:8080/api/customers/...  /api/accounts/...  /api/transfers
+   Swagger         http://localhost:8081/swagger-ui.html  ·  http://localhost:8082/swagger-ui.html
    Eureka          http://localhost:8761
    Config          http://localhost:8888/customers-service/default
    Keycloak        http://localhost:8180/admin  (admin / admin)
