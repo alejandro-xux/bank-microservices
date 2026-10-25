@@ -86,7 +86,7 @@ class DepositIntegrationTest extends PostgresIntegrationTest {
             for (int i = 0; i < deposits; i++) {
                 results.add(pool.submit(() -> {
                     start.await();
-                    return depositService.deposit(active, new BigDecimal("10.00"));
+                    return depositService.deposit(UUID.randomUUID(), active, new BigDecimal("10.00"));
                 }));
             }
             start.countDown();
@@ -155,9 +155,15 @@ class DepositIntegrationTest extends PostgresIntegrationTest {
         assertThat(balance(active)).isEqualTo("1500.50");
     }
 
+    // Cada llamada es un depósito distinto (clave nueva); las pruebas de idempotencia usan depositWithKey
     private static RequestBuilder deposit(UUID accountId, String token, String body) {
+        return depositWithKey(accountId, token, UUID.randomUUID(), body);
+    }
+
+    private static RequestBuilder depositWithKey(UUID accountId, String token, UUID key, String body) {
         return post("/accounts/" + accountId + "/deposits")
                 .header(HttpHeaders.AUTHORIZATION, token)
+                .header("Idempotency-Key", key.toString())
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(body);
     }

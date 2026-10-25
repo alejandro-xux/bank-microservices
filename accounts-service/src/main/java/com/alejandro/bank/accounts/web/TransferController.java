@@ -24,9 +24,6 @@ import java.util.UUID;
 @Tag(name = "Transfers", description = "Transferencias entre cuentas")
 public class TransferController {
 
-    static final String IDEMPOTENCY_KEY = "Idempotency-Key";
-    static final String IDEMPOTENT_REPLAYED = "Idempotent-Replayed";
-
     private final TransferService transferService;
 
     @PostMapping
@@ -40,14 +37,14 @@ public class TransferController {
     @ApiResponse(responseCode = "503", description = "No se pudo consultar el cliente")
     public ResponseEntity<TransferResponse> transfer(
             @Parameter(description = "UUID nuevo por cada transferencia; el mismo en cada reintento")
-            @RequestHeader(IDEMPOTENCY_KEY) UUID idempotencyKey,
+            @RequestHeader(IdempotencyHeaders.IDEMPOTENCY_KEY) UUID idempotencyKey,
             @Valid @RequestBody TransferRequest request,
             Authentication authentication) {
         TransferService.Result result = transferService.transfer(idempotencyKey, request.fromAccountId(),
                 request.toAccountNumber(), request.amount(), authentication);
         ResponseEntity.BodyBuilder response = ResponseEntity.status(HttpStatus.CREATED);
         if (result.replayed()) {
-            response.header(IDEMPOTENT_REPLAYED, "true");
+            response.header(IdempotencyHeaders.IDEMPOTENT_REPLAYED, "true");
         }
         return response.body(TransferResponse.from(result.transfer()));
     }

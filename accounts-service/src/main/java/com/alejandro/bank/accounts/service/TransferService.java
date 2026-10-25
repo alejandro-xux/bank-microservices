@@ -11,11 +11,6 @@ import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.stereotype.Service;
 
 import java.math.BigDecimal;
-import java.math.RoundingMode;
-import java.nio.charset.StandardCharsets;
-import java.security.MessageDigest;
-import java.security.NoSuchAlgorithmException;
-import java.util.HexFormat;
 import java.util.UUID;
 
 // Orquesta una transferencia FUERA de la transacción: autoriza (puede llamar a customers-service),
@@ -36,7 +31,7 @@ public class TransferService {
                            Authentication authentication) {
         // 1. Autorización antes que la idempotencia: con la clave de otro usuario solo se recibe 403
         accessPolicy.checkCanDebit(fromAccountId, authentication);
-        String hash = requestHash(fromAccountId, toAccountNumber, amount);
+        String hash = RequestHash.of(fromAccountId, toAccountNumber, amount);
 
         // 2. ¿Ya se hizo? (reintento normal: la respuesta anterior se perdió)
         var existing = transferRepository.findByIdempotencyKey(idempotencyKey);
@@ -59,18 +54,6 @@ public class TransferService {
             throw new IdempotencyKeyConflictException(idempotencyKey);
         }
         return new Result(transfer, true);
-    }
-
-    // Huella de los datos: misma clave + misma huella = reintento; misma clave + otra huella = 409.
-    // El monto con 2 decimales, así "100" y "100.00" son la misma petición
-    static String requestHash(UUID fromAccountId, String toAccountNumber, BigDecimal amount) {
-        String data = fromAccountId + "|" + toAccountNumber + "|" + amount.setScale(2, RoundingMode.UNNECESSARY).toPlainString();
-        try {
-            return HexFormat.of().formatHex(
-                    MessageDigest.getInstance("SHA-256").digest(data.getBytes(StandardCharsets.UTF_8)));
-        } catch (NoSuchAlgorithmException ex) {
-            throw new IllegalStateException("SHA-256 no disponible", ex);
-        }
     }
 
     // Quién la pidió: el oid del token (el del asesor si la ordenó él)

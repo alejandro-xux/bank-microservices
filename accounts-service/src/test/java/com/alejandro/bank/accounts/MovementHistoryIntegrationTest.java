@@ -67,7 +67,7 @@ class MovementHistoryIntegrationTest extends PostgresIntegrationTest {
         jdbc.update("delete from account");
         anaPen = insertAccount(ANA, AccountNumber.of(920_001), "0.00");
         luisPen = insertAccount(LUIS, luisPenNumber, "100.00");
-        depositService.deposit(anaPen, new BigDecimal("50.00"));
+        depositService.deposit(UUID.randomUUID(), anaPen, new BigDecimal("50.00"));
         for (int i = 0; i < 24; i++) {
             if (i % 2 == 0) {
                 transferService.transfer(UUID.randomUUID(), anaPen, luisPenNumber, new BigDecimal("1.00"), admin());

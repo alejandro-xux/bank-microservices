@@ -44,12 +44,25 @@ public class Movement {
     @Column(name = "transfer_id")
     private UUID transferId;
 
+    // Solo en un depósito (BANK-64): la Idempotency-Key del asesor y la huella de la petición.
+    // En una transferencia la clave vive en transfer
+    @Column(name = "idempotency_key")
+    private UUID idempotencyKey;
+
+    @Column(name = "request_hash")
+    private String requestHash;
+
     @Column(name = "created_at")
     private Instant createdAt;
 
-    // Entrada de dinero sin transferencia (depósito en ventanilla, BANK-55)
-    public static Movement credit(UUID accountId, BigDecimal amount, BigDecimal balanceAfter) {
-        return of(accountId, MovementType.CREDIT, amount, balanceAfter, null);
+    // Depósito en ventanilla (BANK-55): entrada de dinero sin transferencia, con la Idempotency-Key que lo
+    // hace único (BANK-64)
+    public static Movement deposit(UUID accountId, BigDecimal amount, BigDecimal balanceAfter,
+                                   UUID idempotencyKey, String requestHash) {
+        Movement movement = of(accountId, MovementType.CREDIT, amount, balanceAfter, null);
+        movement.idempotencyKey = idempotencyKey;
+        movement.requestHash = requestHash;
+        return movement;
     }
 
     // Las dos líneas de una transferencia (BANK-56): salida en el origen y entrada en el destino
@@ -71,5 +84,10 @@ public class Movement {
         movement.transferId = transferId;
         movement.createdAt = Instant.now();
         return movement;
+    }
+
+    // Misma clave y misma huella = reintento de este depósito; misma clave y otra huella = 409
+    public boolean isSameRequest(String hash) {
+        return hash.equals(requestHash);
     }
 }
