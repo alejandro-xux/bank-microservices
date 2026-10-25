@@ -58,6 +58,17 @@ jobs:
         if: always()
         run: python3 -I .github/scripts/test-summary.py "${{ matrix.module }}" >> "$GITHUB_STEP_SUMMARY"
 
+      # Lo que necesita el análisis único de Sonar (BANK-84): clases de main y de pruebas, y la cobertura de JaCoCo
+      - name: Insumos para Sonar
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: sonar-${{ matrix.module }}
+          path: |
+            ${{ matrix.module }}/build/classes/java/main
+            ${{ matrix.module }}/build/classes/java/test
+            ${{ matrix.module }}/build/reports/jacoco/test/jacocoTestReport.xml
+          retention-days: 1
+
       - name: Reportes de pruebas
         if: failure()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
@@ -66,16 +77,71 @@ jobs:
           path: ${{ matrix.module }}/build/reports/tests/
           retention-days: 7
 
+  # SonarCloud (BANK-84, spike BANK-82 Q5): UN análisis del repo entero cuando las pruebas pasaron. La configuración
+  # está en sonar-project.properties; este job solo le agrega las rutas de los jars, que dependen de esta máquina.
+  # No corre si el PR viene de un fork o de Dependabot: GitHub no les pasa los secrets (sin SONAR_TOKEN fallaría)
+  sonar:
+    name: sonar
+    needs: test
+    if: >-
+      needs.test.result == 'success' &&
+      github.actor != 'dependabot[bot]' &&
+      (github.event_name == 'push' || github.event.pull_request.head.repo.full_name == github.repository)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          # Sonar necesita la historia para saber qué código es nuevo en el PR
+          fetch-depth: 0
+
+      - uses: actions/setup-java@b843ebf9b913146b38da2eaa7aeddf76074ae1ad # v6.1.0
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      - uses: gradle/actions/setup-gradle@3f5f9adaf7d9fecd50b5935e54106014257a94e6 # v6.4.0
+
+      # Las rutas de los jars de cada módulo en esta máquina (tarea sonarLibraries de gradle/quality.gradle), en paralelo.
+      # Se agregan a sonar-project.properties (solo en esta copia del repo): son ~125 KB, y como argumento de la action
+      # pasarían por una sola variable de entorno, que Linux corta en 128 KB
+      - name: Dependencias de cada módulo
+        run: |
+          modules="contracts customers-service accounts-service notifications-service api-gateway config-server discovery-server"
+          pids=""
+          for m in $modules; do (cd "$m" && ./gradlew -q sonarLibraries --no-daemon) & pids="$pids $!"; done
+          for pid in $pids; do wait "$pid"; done
+          join() { for m in $modules; do tr ',' '\n' < "$m/build/sonar/$1"; done | grep . | sort -u | paste -sd, -; }
+          echo "sonar.java.libraries=$(join libraries.txt)" >> sonar-project.properties
+          echo "sonar.java.test.libraries=$(join test-libraries.txt)" >> sonar-project.properties
+
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          pattern: sonar-*
+          path: sonar-inputs
+
+      - name: Análisis y Quality Gate
+        uses: SonarSource/sonarqube-scan-action@d209202bc7d53ff1cc128f7f907dac145c9d6ae9 # v8.3.0
+        env:
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+
   # El único check que exige protect-main: si mañana hay 8 módulos, la ruleset no cambia. Corre SIEMPRE y falla a
   # propósito si la matriz no terminó en success: un job saltado o cancelado cuenta como "pasó" para GitHub
+  # Desde BANK-84 también exige el Quality Gate: Sonar tiene que haber pasado, salvo en un PR de un fork o de
+  # Dependabot, donde no puede correr (no hay secrets) y queda "skipped"
   ci-ok:
     name: ci-ok
-    needs: test
+    needs: [test, sonar]
     if: always()
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
-      - name: Todas las pruebas pasaron
+      - name: Pruebas y Quality Gate
+        env:
+          TESTS: ${{ needs.test.result }}
+          SONAR: ${{ needs.sonar.result }}
+          SONAR_CANNOT_RUN: ${{ github.actor == 'dependabot[bot]' || (github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository) }}
         run: |
-          echo "Resultado de la matriz: ${{ needs.test.result }}"
-          test "${{ needs.test.result }}" = "success"
+          echo "Pruebas: $TESTS · Sonar: $SONAR · Sonar no puede correr aquí: $SONAR_CANNOT_RUN"
+          test "$TESTS" = "success"
+          test "$SONAR" = "success" || { test "$SONAR" = "skipped" && test "$SONAR_CANNOT_RUN" = "true"; }

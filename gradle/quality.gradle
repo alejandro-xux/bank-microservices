@@ -1,0 +1,36 @@
+// Calidad, igual en todos los módulos (BANK-84). Cada módulo lo aplica con apply from: '../gradle/quality.gradle'.
+// Un solo lugar en vez de 7 copias: si mañana cambia, cambia para todos
+
+// Cobertura: después de las pruebas queda build/reports/jacoco/test/jacocoTestReport.xml, el que lee SonarCloud.
+// Sin umbral aquí (D4): el Quality Gate de Sonar es el único que decide
+apply plugin: 'jacoco'
+
+tasks.named('test') {
+    finalizedBy tasks.named('jacocoTestReport')
+}
+
+tasks.named('jacocoTestReport') {
+    reports {
+        xml.required = true
+        html.required = true
+    }
+}
+
+// Los jars de las dependencias (y las clases de contracts, que llegan como carpeta), para que Sonar entienda los tipos que usa el código (sin ellos el análisis del
+// spike BANK-82 quedó con tipos sin resolver). El análisis corre en otro job: esta tarea escribe las rutas de los
+// jars en esa máquina, desde la caché de Gradle
+tasks.register('sonarLibraries') {
+    description = 'Escribe en build/sonar las rutas de los jars de main y de las pruebas'
+    def main = configurations.compileClasspath
+    def test = configurations.testCompileClasspath
+    def out = layout.buildDirectory.dir('sonar')
+    // Declararlas como entrada hace que Gradle construya antes lo que venga de includeBuild (contracts)
+    inputs.files(main, test)
+    outputs.upToDateWhen { false }
+    doLast {
+        def dir = out.get().asFile
+        dir.mkdirs()
+        new File(dir, 'libraries.txt').text = main.files.findAll { it.exists() }.join(',')
+        new File(dir, 'test-libraries.txt').text = test.files.findAll { it.exists() }.join(',')
+    }
+}

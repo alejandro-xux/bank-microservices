@@ -6,6 +6,9 @@ plugins {
 	id 'com.google.protobuf' version '0.10.0'
 }
 
+// JaCoCo y lo que necesita Sonar, igual en todos los módulos (BANK-84)
+apply from: '../gradle/quality.gradle'
+
 group = 'com.alejandro.bank'
 version = '0.0.1-SNAPSHOT'
 
