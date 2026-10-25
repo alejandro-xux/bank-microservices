@@ -162,7 +162,8 @@ jobs:
           echo "El canario funciona: gitleaks detectó la clave plantada"
 
       - name: Secretos en todo el historial
-        run: "$RUNNER_TEMP/gitleaks" git . --config .gitleaks.toml --no-banner --redact --verbose
+        run: |
+          "$RUNNER_TEMP/gitleaks" git . --config .gitleaks.toml --no-banner --redact --verbose
 
   # El único check que exige protect-main: si mañana hay 8 módulos, la ruleset no cambia. Corre SIEMPRE y falla a
   # propósito si la matriz no terminó en success: un job saltado o cancelado cuenta como "pasó" para GitHub
