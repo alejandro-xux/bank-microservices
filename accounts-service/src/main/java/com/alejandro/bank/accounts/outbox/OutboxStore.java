@@ -4,6 +4,8 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Repository;
 
+import java.sql.Timestamp;
+import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
 
@@ -47,5 +49,14 @@ public class OutboxStore {
     public void markPublished(List<UUID> ids) {
         jdbc.update("UPDATE outbox SET published_at = clock_timestamp() WHERE id = ANY (?)",
                 (Object) ids.toArray(UUID[]::new));
+    }
+
+    // Borra hasta "limit" filas publicadas antes de "before" (BANK-81). Una pendiente tiene published_at NULL y
+    // NULL < x nunca es verdadero: este filtro es lo que garantiza que un evento sin publicar no se borre. No toca
+    // el candado del relay ni sus filas (el relay solo lee y marca pendientes), así que no lo frena
+    public int deletePublishedBefore(Instant before, int limit) {
+        return jdbc.update("DELETE FROM outbox WHERE id IN "
+                        + "(SELECT id FROM outbox WHERE published_at < ? ORDER BY published_at LIMIT ?)",
+                Timestamp.from(before), limit);
     }
 }

@@ -27,6 +27,9 @@ bank:
   outbox:
     relay:
       enabled: false
+    # Ni la limpieza (BANK-81): OutboxCleanup se llama a mano
+    cleanup:
+      enabled: false
   # Tampoco el recuperador de la SAGA (BANK-79): las pruebas llaman a TransferRecovery a mano
   saga:
     recovery:

@@ -61,6 +61,12 @@ bank:
   outbox:
     poll-interval-ms: 500
     batch-size: 100
+    # Limpieza (BANK-81): cada hora borra, de a 1000, las filas publicadas hace más de 7 días (la retención del
+    # topic en Event Hubs Standard). Las pendientes nunca
+    cleanup:
+      interval-ms: 3600000
+      retention: 7d
+      batch-size: 1000
 
 springdoc:
   swagger-ui:

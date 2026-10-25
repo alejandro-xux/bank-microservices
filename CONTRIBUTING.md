@@ -28,3 +28,16 @@
 ## Convenciones
 - Java 21, Gradle con toolchain.
 - Paquete base: `com.alejandro.bank.<servicio>`.
+
+## Pruebas
+Reglas que salieron de pruebas que fallaban a veces (Sprints 8 y 9). Valen para toda prueba que comparte Kafka, Mailpit o una base con otras.
+
+- **Un consumer group por contexto de Spring.** Spring deja vivos en caché los contextos de otras clases de prueba. Con el mismo grupo, sus listeners se reparten las particiones y el evento de una prueba lo consume otra. Por eso `IntegrationTest` usa `group-id=notifications-test-${random.uuid}`.
+- **Datos únicos por prueba**: montos, ids y números de cuenta propios de cada caso (por ejemplo `41.13`, `42.13`…). El topic y la bandeja de Mailpit son de toda la suite. Filtrar por un dato único es lo que permite contar "exactamente un correo".
+- **Publicar como el productor real**: con los headers `event-type` y `event-id` del relay (`IntegrationTest.publish`). Sin el header, el consumidor no sabe qué mensaje es.
+- **Esperar una condición, no un tiempo**: por ejemplo, hasta que el evento esté en `processed_event`. Si no se cumple dentro del plazo, la prueba falla; no sigue como si nada.
+- **Los procesos de fondo apagados en las pruebas** (relay del outbox, recuperador de la SAGA, limpieza del outbox). La prueba los llama a mano, sin carreras con un `@Scheduled`.
+- **Prueba al revés en cada garantía.** Se rompe a propósito la línea que la da (el filtro, el candado, el header…), se corre la prueba, se ve fallar donde se espera y se restaura. El resultado se lee en los XML de `build/test-results/test/` (cuántas pruebas, cuáles fallaron y con qué mensaje), no en la salida de `gradlew -q`: un "BUILD SUCCESSFUL" no dice qué pruebas corrieron.
+- **Después de una prueba de dinero, la regla global**: saldos + pendientes = lo que había. Revisar cada cuenta por separado no alcanza.
+- **`infra/start-local.sh` en segundo plano y sin pipe** (`… > archivo.log 2>&1`). Si la terminal o el pipe se cierran, se llevan los servicios que arrancó con `nohup`. Para reiniciar uno, detener solo ese proceso y volver a correr el script: levanta lo que falta y deja lo demás.
+- **Antes de una verificación destructiva** (`stop-local.sh --all`, borrar datos locales), decir qué se pierde. Los contenedores no tienen volumen. Los datos de prueba se recrean con `infra/seed-local.sh`.
