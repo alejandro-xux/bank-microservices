@@ -37,6 +37,12 @@ dependencies {
 	implementation 'org.flywaydb:flyway-database-postgresql'
 	implementation 'org.springframework.cloud:spring-cloud-starter-config'
 	implementation 'org.springframework.cloud:spring-cloud-starter-netflix-eureka-client'
+	// Contacto del cliente por gRPC con el token propio del servicio (client credentials, BANK-71)
+	implementation 'org.springframework.grpc:spring-grpc-client-spring-boot-starter'
+	implementation 'org.springframework.boot:spring-boot-starter-security-oauth2-client'
+	// Explícito aunque webmvc ya lo traiga: sin Jackson, Spring Security lee la respuesta del token con Gson
+	// (llega con gRPC), pierde expires_in y pide un token nuevo en cada llamada (spike BANK-66, K11)
+	implementation 'org.springframework.boot:spring-boot-starter-jackson'
 	runtimeOnly 'org.postgresql:postgresql'
 	compileOnly 'org.projectlombok:lombok'
 	annotationProcessor 'org.projectlombok:lombok'
@@ -45,6 +51,9 @@ dependencies {
 	testImplementation 'org.testcontainers:testcontainers-junit-jupiter'
 	testImplementation 'org.testcontainers:testcontainers-postgresql'
 	testImplementation 'org.testcontainers:testcontainers-kafka'
+	// customers-service simulado como servidor gRPC en memoria (@AutoConfigureInProcessTransport)
+	testImplementation 'org.springframework.grpc:spring-grpc-test'
+	testImplementation 'org.springframework.grpc:spring-grpc-server-spring-boot-starter'
 	testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
 }
 
@@ -54,4 +63,7 @@ tasks.named('test') {
 	// apagado desde el arranque (en application-test.yaml llegaría tarde: el import se procesa antes)
 	systemProperty 'spring.profiles.active', 'test'
 	systemProperty 'spring.cloud.config.enabled', 'false'
+	// El secreto del cliente local de Keycloak (infra/keycloak/bank-realm.json): config-repo no tiene valor por
+	// defecto, y en application-test.yaml no serviría porque lo importado pisa al archivo que importa
+	systemProperty 'NOTIFICATIONS_CLIENT_SECRET', 'notifications-local'
 }

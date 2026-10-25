@@ -1,4 +1,5 @@
-// Contrato interno accounts-service → customers-service (E6, BANK-60).
+// Contrato interno de customers-service (E6, BANK-60): lo llaman accounts-service y, desde BANK-71,
+// notifications-service.
 // Lo que importa en el binario son los NÚMEROS de campo, no los nombres: antes de cambiar algo,
 // leer las reglas de contracts/README.md. Un cambio incompatible va en un paquete nuevo (v2).
 syntax = "proto3";
@@ -17,6 +18,11 @@ service CustomersService {
 
   // El cliente vinculado al token (solo un CUSTOMER): PERMISSION_DENIED si no tiene vínculo
   rpc GetMyCustomer (GetMyCustomerRequest) returns (CustomerSummary);
+
+  // Nombre y correo para avisarle algo al cliente (BANK-71). Solo el rol NOTIFICATIONS, con el token de
+  // servicio de notifications-service (client credentials): ni el cliente, ni el asesor, ni accounts-service.
+  // Así los datos personales no viajan en los eventos de Kafka y los pide solo quien los necesita
+  rpc GetContact (GetContactRequest) returns (CustomerContact);
 }
 
 message GetCustomerRequest {
@@ -31,6 +37,17 @@ message GetMyCustomerRequest {
 message CustomerSummary {
   string id = 1;
   CustomerStatus status = 2;
+}
+
+message GetContactRequest {
+  string id = 1;
+}
+
+// Lo justo para un aviso: el nombre para el saludo y el correo principal
+message CustomerContact {
+  string id = 1;
+  string name = 2;
+  string email = 3;
 }
 
 // En proto3 el 0 es el valor por defecto de un campo no enviado: nunca significa un estado real.

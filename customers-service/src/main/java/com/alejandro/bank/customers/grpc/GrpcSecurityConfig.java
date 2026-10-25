@@ -27,6 +27,9 @@ public class GrpcSecurityConfig {
                         .methods(SERVICE + "GetCustomer").hasAuthority("ROLE_" + SecurityConfig.ADMIN)
                         // El cliente del token: solo un CUSTOMER (como GET /customers/me)
                         .methods(SERVICE + "GetMyCustomer").hasAuthority("ROLE_" + SecurityConfig.CUSTOMER)
+                        // Nombre y correo para un aviso: solo la cuenta de servicio de notifications-service
+                        // (BANK-71). Ni el asesor ni accounts-service: el que no avisa no necesita el correo
+                        .methods(SERVICE + "GetContact").hasAuthority("ROLE_" + SecurityConfig.NOTIFICATIONS)
                         // Las probes gRPC de AKS no traen token
                         .methods("grpc.health.v1.Health/*").permitAll()
                         // Reflection solo existe si GRPC_REFLECTION_ENABLED=true (local, para grpcurl)

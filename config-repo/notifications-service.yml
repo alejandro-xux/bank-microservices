@@ -26,6 +26,35 @@ spring:
         # Lo que recomienda Event Hubs para no caer en rebalanceos continuos (spike BANK-66, K12)
         request.timeout.ms: 60000
         session.timeout.ms: 30000
+  # customers-service por gRPC (BANK-71): dirección por configuración, como en accounts-service
+  grpc:
+    client:
+      channels:
+        customers:
+          address: ${CUSTOMERS_GRPC_ADDRESS:static://localhost:9091}
+  # Token propio del servicio (client credentials), con el rol NOTIFICATIONS: lo único que permite es GetContact.
+  # En local, el cliente notifications-service del Keycloak (infra/keycloak/bank-realm.json). En Azure, un app
+  # registration de Entra: AUTH_TOKEN_URI = https://login.microsoftonline.com/<tenant>/oauth2/v2.0/token y
+  # AUTH_CLIENT_SCOPE = api://bank-api/.default (o una identidad administrada, sin secreto)
+  security:
+    oauth2:
+      client:
+        registration:
+          bank-api:
+            provider: bank-identity
+            client-id: ${NOTIFICATIONS_CLIENT_ID:notifications-service}
+            # Sin valor por defecto: el secreto nunca va en config-repo (start-local.sh pone el local)
+            client-secret: ${NOTIFICATIONS_CLIENT_SECRET}
+            authorization-grant-type: client_credentials
+            scope: ${AUTH_CLIENT_SCOPE:}
+        provider:
+          bank-identity:
+            token-uri: ${AUTH_TOKEN_URI:http://localhost:8180/realms/bank/protocol/openid-connect/token}
+
+# Plazo máximo de cada llamada a customers-service
+bank:
+  customers:
+    deadline: ${CUSTOMERS_DEADLINE:2s}
 
 server:
   port: 8083
