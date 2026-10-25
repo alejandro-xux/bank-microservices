@@ -20,10 +20,20 @@ updates:
       day: monday
       timezone: America/Lima
     open-pull-requests-limit: 5
-    # Menores y parches juntos en un solo PR por semana; una versión mayor va sola (puede romper y se revisa aparte)
+    # Los parches de todo, juntos en un solo PR por semana. Las versiones menores, cada una en su PR: la primera corrida
+    # agrupó Spring Boot 4.0 → 4.1 con los parches y el PR no compilaba (spring-grpc 1.1 cambió sus starters)
     groups:
-      gradle-menores:
-        update-types: [minor, patch]
+      gradle-parches:
+        update-types: [patch]
+    # Subir Spring Boot, Spring Cloud o Spring gRPC de versión menor o mayor es una migración coordinada (van juntos):
+    # se planifica como un ticket, no llega en un PR automático. Sus parches sí llegan
+    ignore:
+      - dependency-name: 'org.springframework.boot*'
+        update-types: ['version-update:semver-minor', 'version-update:semver-major']
+      - dependency-name: 'org.springframework.cloud:spring-cloud-dependencies'
+        update-types: ['version-update:semver-minor', 'version-update:semver-major']
+      - dependency-name: 'org.springframework.grpc:*'
+        update-types: ['version-update:semver-minor', 'version-update:semver-major']
     commit-message:
       prefix: deps
 
