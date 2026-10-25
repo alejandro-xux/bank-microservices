@@ -1,0 +1,13 @@
+# buf (BANK-86): revisa los .proto de contracts. Lo corre la CI en cada PR (job buf, parte de ci-ok)
+version: v2
+modules:
+  - path: src/main/proto
+# Compatibilidad con la versión de main: WIRE_JSON protege lo que viaja (números y tipos de campo, en binario y en
+# JSON) y no se queja de un cambio solo de nombre en el código generado. Lo que importa es que un consumidor viejo
+# siga leyendo lo que escribe un productor nuevo (los eventos viven días en Kafka)
+breaking:
+  use:
+    - WIRE_JSON
+lint:
+  use:
+    - STANDARD
