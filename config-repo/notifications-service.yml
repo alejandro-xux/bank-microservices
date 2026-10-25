@@ -1,0 +1,47 @@
+# Configuración de notifications-service, servida por el config-server (BANK-70).
+# Los valores por defecto son del entorno local (no son secretos); en Azure llegan por variables.
+spring:
+  datasource:
+    url: jdbc:postgresql://${DB_HOST:localhost}:${DB_PORT:5433}/${DB_NAME:notifications}
+    username: ${DB_USERNAME:notifications}
+    password: ${DB_PASSWORD:notifications-local}
+  threads:
+    virtual:
+      enabled: true
+  # Consumidor de bank.transfers.v1 (BANK-70). En local, el Kafka del compose por su puerta del host (BANK-67);
+  # en Azure, Event Hubs (NAMESPACE.servicebus.windows.net:9093) con SASL_SSL, solo por configuración
+  kafka:
+    bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:localhost:9094}
+    consumer:
+      # Un grupo propio: lleva su propio offset, independiente de cualquier otro consumidor del topic
+      group-id: notifications-service
+      # La primera vez que arranca el grupo lee desde el principio del topic: un evento publicado antes de
+      # desplegar el servicio también se avisa (para eso es idempotente, BANK-72)
+      auto-offset-reset: earliest
+      key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      # Un mensaje ilegible no tira al consumidor: llega al manejo de errores (BANK-73)
+      value-deserializer: org.springframework.kafka.support.serializer.ErrorHandlingDeserializer
+      properties:
+        spring.deserializer.value.delegate.class: com.alejandro.bank.notifications.transfers.TransferCompletedDeserializer
+        # Lo que recomienda Event Hubs para no caer en rebalanceos continuos (spike BANK-66, K12)
+        request.timeout.ms: 60000
+        session.timeout.ms: 30000
+
+server:
+  port: 8083
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
+  endpoint:
+    health:
+      show-components: always
+      probes:
+        enabled: true
+      group:
+        # La readiness incluye la base; Kafka no: si Kafka todavía no arrancó, el consumidor reintenta solo
+        # y el servicio sigue sano (los mensajes esperan en el topic)
+        readiness:
+          include: readinessState,db
