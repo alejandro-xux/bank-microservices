@@ -38,17 +38,20 @@ class TransferEventsIntegrationTest extends TokenMockedIntegrationTest {
 
     @Test
     void theSchemaIsCreatedByFlyway() {
-        assertThat(jdbc.queryForObject("select count(*) from processed_event", Integer.class)).isZero();
+        // Las tablas existen (las crean V1 y V2); su contenido depende de las otras pruebas, que comparten la base
+        assertThat(jdbc.queryForList("select table_name from information_schema.tables where table_schema = 'public'", String.class))
+                .contains("processed_event", "sent_notification", "flyway_schema_history");
     }
 
     @Test
     void aTransferCompletedPublishedByAccountsReachesTheNotifier() throws Exception {
+        // Monto propio de esta prueba: las de correo filtran la bandeja por monto, y la bandeja es de toda la suite
         String eventId = UUID.randomUUID().toString();
         TransferCompleted event = TransferCompleted.newBuilder()
                 .setEventId(eventId).setTransferId(UUID.randomUUID().toString())
                 .setFromAccountNumber("001-0000000001-6").setToAccountNumber("001-0000000003-2")
                 .setFromCustomerId(ANA).setToCustomerId(LUIS)
-                .setAmount("25.00").setCurrency("PEN").build();
+                .setAmount("19.00").setCurrency("PEN").build();
 
         // Como lo publica el relay de accounts-service (BANK-69): bytes del Protobuf, clave = cuenta origen
         try (KafkaProducer<String, byte[]> producer = new KafkaProducer<>(Map.of(
@@ -59,7 +62,7 @@ class TransferEventsIntegrationTest extends TokenMockedIntegrationTest {
         }
 
         verify(notifier, timeout(20_000)).notify(argThat(received -> received.getEventId().equals(eventId)
-                && received.getAmount().equals("25.00")));
+                && received.getAmount().equals("19.00")));
     }
 
     @Test

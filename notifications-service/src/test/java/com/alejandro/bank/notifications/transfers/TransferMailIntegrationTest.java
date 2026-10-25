@@ -38,11 +38,16 @@ class TransferMailIntegrationTest extends TokenMockedIntegrationTest {
     @Autowired
     JdbcTemplate jdbc;
 
+    @Autowired
+    DeliveryCircuit circuit;
+
     MailpitInbox inbox = inbox();
 
     @BeforeEach
     void cleanInbox() throws Exception {
         inbox.clear();
+        // Las pruebas de fallas suman fallas al circuito: que no lo abran para las demás
+        circuit.reset();
     }
 
     @Test

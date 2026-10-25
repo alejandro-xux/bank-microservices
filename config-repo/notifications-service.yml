@@ -26,6 +26,11 @@ spring:
         # Lo que recomienda Event Hubs para no caer en rebalanceos continuos (spike BANK-66, K12)
         request.timeout.ms: 60000
         session.timeout.ms: 30000
+    # Productor solo para el DLT (BANK-73): reenvía el evento que falló, o los bytes originales si no se pudo leer
+    producer:
+      key-serializer: org.apache.kafka.common.serialization.StringSerializer
+      value-serializer: com.alejandro.bank.notifications.kafka.DeadLetterSerializer
+      acks: all
   # Correo (BANK-72). En local, Mailpit (BANK-67: SMTP en :1025, bandeja en http://localhost:8025); en Azure, un
   # proveedor real (Azure Communication Services Email) con usuario y contraseña por variable
   mail:
@@ -68,6 +73,9 @@ bank:
   notifications:
     mail:
       from: ${MAIL_FROM:avisos@bank.local}
+    # Circuit breaker de la entrega (BANK-73): tiempo abierto antes de probar otra vez (medio abierto)
+    circuit:
+      wait-open: 10s
 
 server:
   port: 8083
@@ -80,6 +88,9 @@ management:
   endpoint:
     health:
       show-components: always
+      # Para ver el estado del circuito de avisos (deliveryCircuit, BANK-73). El servicio no tiene ruta pública:
+      # en AKS su actuator solo se ve dentro del cluster
+      show-details: always
       probes:
         enabled: true
       group:
