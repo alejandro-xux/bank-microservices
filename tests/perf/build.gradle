@@ -1,0 +1,29 @@
+// Medición de latencia y tamaño de la comunicación accounts → customers (BANK-63).
+// Uso (con el entorno local arriba, infra/start-local.sh):  cd tests/perf && ./gradlew run
+// Opciones: ./gradlew run --args="--iterations 2000 --warmup 200"
+plugins {
+	id 'java'
+	id 'application'
+}
+
+java {
+	toolchain {
+		languageVersion = JavaLanguageVersion.of(21)
+	}
+}
+
+repositories {
+	mavenCentral()
+}
+
+dependencies {
+	implementation platform('com.alejandro.bank:platform-bom')
+	// El mismo contrato que usan los servicios
+	implementation 'com.alejandro.bank:contracts'
+	// Transporte gRPC para un cliente fuera de Spring
+	implementation 'io.grpc:grpc-netty-shaded'
+}
+
+application {
+	mainClass = 'com.alejandro.bank.perf.InternalCallBenchmark'
+}
