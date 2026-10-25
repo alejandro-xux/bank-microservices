@@ -22,7 +22,7 @@ spring:
       # Un mensaje ilegible no tira al consumidor: llega al manejo de errores (BANK-73)
       value-deserializer: org.springframework.kafka.support.serializer.ErrorHandlingDeserializer
       properties:
-        spring.deserializer.value.delegate.class: com.alejandro.bank.notifications.transfers.TransferCompletedDeserializer
+        spring.deserializer.value.delegate.class: com.alejandro.bank.notifications.transfers.TransferEventDeserializer
         # Lo que recomienda Event Hubs para no caer en rebalanceos continuos (spike BANK-66, K12)
         request.timeout.ms: 60000
         session.timeout.ms: 30000

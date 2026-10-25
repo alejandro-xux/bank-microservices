@@ -9,14 +9,9 @@ import io.github.resilience4j.circuitbreaker.CircuitBreaker;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.consumer.KafkaConsumer;
-import org.apache.kafka.clients.producer.KafkaProducer;
-import org.apache.kafka.clients.producer.ProducerConfig;
-import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.serialization.ByteArrayDeserializer;
-import org.apache.kafka.common.serialization.ByteArraySerializer;
 import org.apache.kafka.common.serialization.StringDeserializer;
-import org.apache.kafka.common.serialization.StringSerializer;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -108,14 +103,10 @@ class ResilienceIntegrationTest extends TokenMockedIntegrationTest {
                 .build();
     }
 
+    // Todos con la misma clave: misma partición, en orden (los malos van ANTES del válido). Todos dicen ser un
+    // TransferCompleted: los ilegibles e inválidos son de un tipo conocido, por eso van al DLT y no se ignoran
     private static void publish(byte[] value) throws Exception {
-        try (KafkaProducer<String, byte[]> producer = new KafkaProducer<>(Map.of(
-                ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, KAFKA.getBootstrapServers(),
-                ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, StringSerializer.class,
-                ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, ByteArraySerializer.class))) {
-            // Todos con la misma clave: misma partición, en orden (los malos van ANTES del válido)
-            producer.send(new ProducerRecord<>(TransferTopics.TOPIC, "cuenta-de-prueba", value)).get();
-        }
+        publish("cuenta-de-prueba", TransferTopics.TRANSFER_COMPLETED, value);
     }
 
     private static List<ConsumerRecord<String, byte[]>> awaitDeadLetters(String marker, int count) throws Exception {

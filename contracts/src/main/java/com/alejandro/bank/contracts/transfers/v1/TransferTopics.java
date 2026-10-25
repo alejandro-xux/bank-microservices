@@ -15,7 +15,10 @@ public final class TransferTopics {
     public static final String HEADER_EVENT_TYPE = "event-type";
     public static final String HEADER_EVENT_ID = "event-id";
 
+    // Valores del header event-type: dicen qué mensaje de transfer_events.proto hay en el payload
     public static final String TRANSFER_COMPLETED = "TransferCompleted";
+    // BANK-80
+    public static final String TRANSFER_FAILED = "TransferFailed";
 
     private TransferTopics() {
     }

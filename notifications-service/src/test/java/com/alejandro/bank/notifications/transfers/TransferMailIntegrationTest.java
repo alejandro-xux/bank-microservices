@@ -5,11 +5,6 @@ import com.alejandro.bank.contracts.transfers.v1.TransferTopics;
 import com.alejandro.bank.notifications.MailpitInbox;
 import com.alejandro.bank.notifications.TokenMockedIntegrationTest;
 import com.google.protobuf.Timestamp;
-import org.apache.kafka.clients.producer.KafkaProducer;
-import org.apache.kafka.clients.producer.ProducerConfig;
-import org.apache.kafka.clients.producer.ProducerRecord;
-import org.apache.kafka.common.serialization.ByteArraySerializer;
-import org.apache.kafka.common.serialization.StringSerializer;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -17,7 +12,6 @@ import org.springframework.jdbc.core.JdbcTemplate;
 
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.Callable;
 import java.util.concurrent.CountDownLatch;
@@ -159,11 +153,6 @@ class TransferMailIntegrationTest extends TokenMockedIntegrationTest {
     }
 
     private static void publish(TransferCompleted event) throws Exception {
-        try (KafkaProducer<String, byte[]> producer = new KafkaProducer<>(Map.of(
-                ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, KAFKA.getBootstrapServers(),
-                ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, StringSerializer.class,
-                ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, ByteArraySerializer.class))) {
-            producer.send(new ProducerRecord<>(TransferTopics.TOPIC, event.getFromAccountId(), event.toByteArray())).get();
-        }
+        publish(event.getFromAccountId(), TransferTopics.TRANSFER_COMPLETED, event.toByteArray());
     }
 }

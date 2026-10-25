@@ -1,6 +1,5 @@
 package com.alejandro.bank.notifications.transfers;
 
-import com.alejandro.bank.contracts.transfers.v1.TransferCompleted;
 import com.alejandro.bank.notifications.customers.CustomerContacts;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -12,6 +11,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.util.Optional;
 import java.util.UUID;
+import java.util.function.Function;
 
 // El aviso a UN destinatario, en una transacción (BANK-72): reclamarlo, pedir su contacto y mandarlo. Clase aparte
 // de TransferNotifier porque @Transactional solo actúa al llamarla desde otra clase
@@ -30,29 +30,30 @@ class RecipientNotifier {
 
     // Si el SMTP o customers-service fallan, la excepción deshace el reclamo y el aviso se reintenta.
     // Si el proceso muere justo después de mandar y antes del COMMIT, el reintento lo manda otra vez: igual que el
-    // relay de accounts, la garantía es "al menos una vez"
+    // relay de accounts, la garantía es "al menos una vez". El correo lo arma quien llama (según el evento, BANK-80)
+    // a partir del nombre del cliente
     @Transactional
-    public void notify(TransferCompleted event, Recipient recipient, String customerId) {
-        UUID eventId = UUID.fromString(event.getEventId());
+    public void notify(UUID eventId, String transferId, Recipient recipient, String customerId,
+                       Function<String, TransferMails.Mail> mailFor) {
         if (!sentLog.claim(eventId, recipient, customerId)) {
             log.debug("Aviso {} del evento {} ya enviado", recipient, eventId);
             return;
         }
         // Contacto y correo, dentro del circuit breaker (BANK-73): con el circuito abierto ni se intenta
-        boolean sent = circuit.call(() -> deliver(event, recipient, customerId));
+        boolean sent = circuit.call(() -> deliver(transferId, customerId, mailFor));
         if (!sent) {
             sentLog.markNotSent(eventId, recipient);
         }
     }
 
     // true si se mandó; false si no había a quién (cliente inexistente o sin correo), que no se reintenta
-    private boolean deliver(TransferCompleted event, Recipient recipient, String customerId) {
+    private boolean deliver(String transferId, String customerId, Function<String, TransferMails.Mail> mailFor) {
         Optional<CustomerContacts.Contact> contact = contacts.find(customerId).filter(c -> !c.email().isBlank());
         if (contact.isEmpty()) {
-            log.warn("Sin correo para el cliente {}: no se le avisa la transferencia {}", customerId, event.getTransferId());
+            log.warn("Sin correo para el cliente {}: no se le avisa la transferencia {}", customerId, transferId);
             return false;
         }
-        TransferMails.Mail content = TransferMails.of(event, recipient, contact.get().name());
+        TransferMails.Mail content = mailFor.apply(contact.get().name());
         SimpleMailMessage message = new SimpleMailMessage();
         message.setFrom(from);
         message.setTo(contact.get().email());
