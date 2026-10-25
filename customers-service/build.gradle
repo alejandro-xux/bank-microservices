@@ -27,6 +27,9 @@ dependencies {
 
 	// Clases generadas de contracts/customers.proto (BANK-60)
 	implementation 'com.alejandro.bank:contracts'
+	// Servidor gRPC en :9091 para la comunicación interna (BANK-61), con su servicio health para las probes
+	implementation 'org.springframework.grpc:spring-grpc-server-spring-boot-starter'
+	implementation 'io.grpc:grpc-services'
 	implementation 'org.springframework.boot:spring-boot-starter-actuator'
 	implementation 'org.springframework.boot:spring-boot-starter-validation'
 	implementation 'org.springframework.boot:spring-boot-starter-webflux'
@@ -45,6 +48,8 @@ dependencies {
 	testImplementation 'org.springframework.boot:spring-boot-starter-security-oauth2-resource-server-test'
 	testImplementation 'org.springframework.boot:spring-boot-testcontainers'
 	testImplementation 'org.testcontainers:testcontainers-junit-jupiter'
+	// Servidor y canales gRPC en memoria para las pruebas (@AutoConfigureInProcessTransport)
+	testImplementation 'org.springframework.grpc:spring-grpc-test'
 	testCompileOnly 'org.projectlombok:lombok'
 	testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
 	testAnnotationProcessor 'org.projectlombok:lombok'
