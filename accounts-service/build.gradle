@@ -60,6 +60,11 @@ dependencies {
 	// customers-service simulado como servidor gRPC en memoria (@AutoConfigureInProcessTransport)
 	testImplementation 'org.springframework.grpc:spring-grpc-test'
 	testImplementation 'org.springframework.grpc:spring-grpc-server-spring-boot-starter'
+	// BDD (BANK-87): las reglas de una transferencia como escenarios en español (src/test/resources/features)
+	testImplementation 'io.cucumber:cucumber-java'
+	testImplementation 'io.cucumber:cucumber-spring'
+	testImplementation 'io.cucumber:cucumber-junit-platform-engine'
+	testImplementation 'org.junit.platform:junit-platform-suite'
 	testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
 }
 

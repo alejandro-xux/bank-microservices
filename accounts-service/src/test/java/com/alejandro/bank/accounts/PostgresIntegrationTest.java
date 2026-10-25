@@ -120,11 +120,17 @@ public abstract class PostgresIntegrationTest {
     @BeforeEach
     void tokens() {
         RECEIVED_AUTHORIZATION.set(null);
-        when(jwtDecoder.decode("token-asesor")).thenReturn(jwt("token-asesor", "7b2e9d4c", "ADMIN"));
-        when(jwtDecoder.decode("token-ana")).thenReturn(jwt("token-ana", "4f8c2a1e", "CUSTOMER"));
-        when(jwtDecoder.decode("token-luis")).thenReturn(jwt("token-luis", "9c3d5e7f", "CUSTOMER"));
-        when(jwtDecoder.decode("token-sin-vinculo")).thenReturn(jwt("token-sin-vinculo", "5e5e5e5e", "CUSTOMER"));
-        when(jwtDecoder.decode("token-caido")).thenReturn(jwt("token-caido", "6f6f6f6f", "CUSTOMER"));
+        stubTokens(jwtDecoder);
+    }
+
+    // Los tokens simulados que entiende el JwtDecoder. Aparte del @BeforeEach para que los escenarios de Cucumber
+    // (BANK-87), que no pasan por el ciclo de JUnit, los preparen igual
+    protected static void stubTokens(JwtDecoder decoder) {
+        when(decoder.decode("token-asesor")).thenReturn(jwt("token-asesor", "7b2e9d4c", "ADMIN"));
+        when(decoder.decode("token-ana")).thenReturn(jwt("token-ana", "4f8c2a1e", "CUSTOMER"));
+        when(decoder.decode("token-luis")).thenReturn(jwt("token-luis", "9c3d5e7f", "CUSTOMER"));
+        when(decoder.decode("token-sin-vinculo")).thenReturn(jwt("token-sin-vinculo", "5e5e5e5e", "CUSTOMER"));
+        when(decoder.decode("token-caido")).thenReturn(jwt("token-caido", "6f6f6f6f", "CUSTOMER"));
     }
 
     private static Jwt jwt(String value, String oid, String role) {
