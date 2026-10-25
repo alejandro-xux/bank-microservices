@@ -5,6 +5,7 @@ import com.alejandro.bank.customers.domain.Customer;
 import com.alejandro.bank.customers.domain.CustomerStatus;
 import com.alejandro.bank.customers.domain.Email;
 import com.alejandro.bank.customers.exception.CustomerAlreadyExistsException;
+import com.alejandro.bank.customers.exception.IdentityAlreadyLinkedException;
 import com.alejandro.bank.customers.security.CustomerAccessPolicy;
 import com.alejandro.bank.customers.service.CustomerService;
 import org.junit.jupiter.api.BeforeEach;
@@ -566,5 +567,90 @@ class CustomerControllerTest {
         anonymousClient.get().uri("/customers/me")
                 .exchange()
                 .expectStatus().isUnauthorized();
+    }
+
+    // ---- Vincular / desvincular la cuenta de acceso (BANK-48) ----
+
+    private static final String LINK_BODY = "{\"identityId\":\"" + ANA_OID + "\"}";
+
+    @Test
+    void adminLinksIdentityReturns200WithETag() {
+        Customer linked = ana();
+        linked.setEtag("\"v2\"");
+        when(customerService.linkIdentity("abc-123", ANA_OID, "\"v1\"")).thenReturn(Mono.just(linked));
+
+        webTestClient.put().uri("/customers/abc-123/identity")
+                .header("If-Match", "\"v1\"")
+                .contentType(MediaType.APPLICATION_JSON)
+                .bodyValue(LINK_BODY)
+                .exchange()
+                .expectStatus().isOk()
+                .expectHeader().valueEquals("ETag", "\"v2\"")
+                .expectBody()
+                .jsonPath("$.id").isEqualTo("abc-123")
+                // El vínculo no se expone en la respuesta
+                .jsonPath("$.identityId").doesNotExist();
+    }
+
+    // Sin la regla de ADMIN, un cliente podría unir su cuenta a la ficha de otro
+    @Test
+    void customerCannotLinkIdentity() {
+        anaClient.put().uri("/customers/def-456/identity")
+                .contentType(MediaType.APPLICATION_JSON)
+                .bodyValue(LINK_BODY)
+                .exchange()
+                .expectStatus().isForbidden();
+
+        verify(customerService, never()).linkIdentity(any(), any(), any());
+    }
+
+    @Test
+    void linkIdentityWithInvalidUuidReturns400() {
+        webTestClient.put().uri("/customers/abc-123/identity")
+                .contentType(MediaType.APPLICATION_JSON)
+                .bodyValue("{\"identityId\":\"no-es-un-uuid\"}")
+                .exchange()
+                .expectStatus().isBadRequest()
+                .expectBody()
+                .jsonPath("$.errors[0].field").isEqualTo("identityId")
+                .jsonPath("$.errors[0].message").isEqualTo("debe ser un UUID");
+
+        verify(customerService, never()).linkIdentity(any(), any(), any());
+    }
+
+    @Test
+    void linkIdentityConflictReturns409ProblemDetail() {
+        when(customerService.linkIdentity("abc-123", ANA_OID, null))
+                .thenReturn(Mono.error(IdentityAlreadyLinkedException.accountLinkedToAnotherCustomer()));
+
+        webTestClient.put().uri("/customers/abc-123/identity")
+                .contentType(MediaType.APPLICATION_JSON)
+                .bodyValue(LINK_BODY)
+                .exchange()
+                .expectStatus().isEqualTo(409)
+                .expectHeader().contentType(MediaType.APPLICATION_PROBLEM_JSON)
+                .expectBody()
+                .jsonPath("$.title").isEqualTo("Vínculo en conflicto")
+                .jsonPath("$.detail").isEqualTo("La cuenta ya está vinculada a otro cliente");
+    }
+
+    @Test
+    void adminUnlinksIdentityReturns204() {
+        when(customerService.unlinkIdentity("abc-123", null)).thenReturn(Mono.empty());
+
+        webTestClient.delete().uri("/customers/abc-123/identity")
+                .exchange()
+                .expectStatus().isNoContent();
+
+        verify(customerService).unlinkIdentity("abc-123", null);
+    }
+
+    @Test
+    void customerCannotUnlinkIdentity() {
+        anaClient.delete().uri("/customers/abc-123/identity")
+                .exchange()
+                .expectStatus().isForbidden();
+
+        verify(customerService, never()).unlinkIdentity(any(), any());
     }
 }

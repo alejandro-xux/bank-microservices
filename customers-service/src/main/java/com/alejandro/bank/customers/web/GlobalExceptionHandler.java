@@ -4,6 +4,7 @@ import com.alejandro.bank.customers.exception.CustomerAlreadyExistsException;
 import com.alejandro.bank.customers.exception.CustomerModifiedException;
 import com.alejandro.bank.customers.exception.CustomerNotFoundException;
 import com.alejandro.bank.customers.exception.CustomerPreconditionFailedException;
+import com.alejandro.bank.customers.exception.IdentityAlreadyLinkedException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ProblemDetail;
 import org.springframework.web.bind.annotation.ExceptionHandler;
@@ -89,6 +90,14 @@ public class GlobalExceptionHandler {
     public ProblemDetail handlePreconditionFailed(CustomerPreconditionFailedException ex) {
         ProblemDetail problem = ProblemDetail.forStatusAndDetail(HttpStatus.PRECONDITION_FAILED, ex.getMessage());
         problem.setTitle("Versión desactualizada");
+        return problem;
+    }
+
+    // 409: la cuenta ya está en otro cliente, o el cliente ya tiene otra cuenta (BANK-48)
+    @ExceptionHandler(IdentityAlreadyLinkedException.class)
+    public ProblemDetail handleIdentityAlreadyLinked(IdentityAlreadyLinkedException ex) {
+        ProblemDetail problem = ProblemDetail.forStatusAndDetail(HttpStatus.CONFLICT, ex.getMessage());
+        problem.setTitle("Vínculo en conflicto");
         return problem;
     }
 }

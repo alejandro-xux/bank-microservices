@@ -45,7 +45,24 @@ TOKEN=$(curl -s -X POST http://localhost:8180/realms/bank/protocol/openid-connec
 echo "$TOKEN" | cut -d. -f2 | python3 -c "import sys,json,base64; p=sys.stdin.read().strip(); print(json.dumps(json.loads(base64.urlsafe_b64decode(p+'='*(-len(p)%4))), indent=2))"
 ```
 
-El token dura 5 minutos. El vínculo cuenta ↔ cliente es el campo `identityId` del documento del cliente en Cosmos, que debe ser igual al `oid` del usuario. En local se agrega a mano en Azure Portal → Cosmos DB → Data Explorer → `bank` / `customers`: abrir el documento de Ana (DNI 12345678), añadir `"identityId": "4f8c2a1e-6b3d-4c9a-9e7f-2d5b8a1c3e01"` y guardar.
+El token dura 5 minutos. El vínculo cuenta ↔ cliente es el campo `identityId` del documento del cliente en Cosmos, que debe ser igual al `oid` del usuario. Lo crea el **asesor** desde la API (no se edita la base a mano):
+
+```bash
+ADM=$(curl -s -X POST http://localhost:8180/realms/bank/protocol/openid-connect/token \
+  -d grant_type=password -d client_id=bank-cli -d username=asesor -d password=asesor-local \
+  | python3 -c "import sys,json; print(json.load(sys.stdin)['access_token'])")
+
+# Vincular (200 con el nuevo ETag; admite If-Match)
+curl -X PUT -H "Authorization: Bearer $ADM" -H "Content-Type: application/json" \
+  -d '{"identityId":"4f8c2a1e-6b3d-4c9a-9e7f-2d5b8a1c3e01"}' \
+  http://localhost:8080/api/customers/c15a442d-5146-471e-8804-746f4b42253b/identity
+
+# Desvincular (204)
+curl -X DELETE -H "Authorization: Bearer $ADM" \
+  http://localhost:8080/api/customers/c15a442d-5146-471e-8804-746f4b42253b/identity
+```
+
+Solo `ADMIN` (un `CUSTOMER` recibe 403). Responde 409 si esa cuenta ya está en otro cliente o si el cliente ya tiene otra cuenta (hay que desvincular primero); repetir el mismo vínculo no cambia nada. El vínculo no aparece en las respuestas de la API.
 
 ### Versiones y configuración centralizadas
 - **`platform-bom/`**: las versiones de todo el sistema (Spring Boot, Spring Cloud, Spring Cloud Azure, parches de Jackson, springdoc), como el BOM corporativo de un banco. Cada servicio es un proyecto Gradle independiente que lo importa con `includeBuild('../platform-bom')`; para cambiar una versión se edita solo ese archivo.
