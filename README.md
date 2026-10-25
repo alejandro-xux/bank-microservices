@@ -427,6 +427,9 @@ Cada PR a `main` corre `.github/workflows/ci.yml`: las pruebas de los 7 módulos
 - **Pasa en tu Mac y falla en la CI:** la CI corre en Linux, y hay diferencias reales. La primera que encontró: allí `Instant.now()` tiene nanosegundos y PostgreSQL guarda microsegundos, así que toda fecha que se guarda pasa por `Timestamps.now()`.
 - Un push nuevo al mismo PR cancela la corrida anterior. En `main` cada merge se prueba completo.
 
+### Jenkins (BANK-89)
+El `Jenkinsfile` de la raíz hace lo mismo que `ci.yml`: los 7 módulos en paralelo (`matrix`, cada celda en su agente), JUnit y cobertura publicados, gitleaks con canario, buf y un análisis de Sonar del repo entero. El token de Sonar es la credencial `sonar-token` de Jenkins. Con el parámetro `SONAR=false` se salta esa etapa. Se probó en un Jenkins temporal en Docker: 327 pruebas en verde, igual que en GitHub. La comparación entre las dos herramientas está en el documento de arquitectura.
+
 ### Calidad (SonarCloud, BANK-84)
 Cuando las pruebas pasan, el job `sonar` analiza **el repo entero en un solo proyecto** ([alejandro-xux_bank-microservices](https://sonarcloud.io/project/overview?id=alejandro-xux_bank-microservices)). Usa las clases compiladas y la cobertura de JaCoCo que dejó cada módulo. `ci-ok` exige que pase el **Quality Gate "Sonar way"**, que mira solo el **código nuevo** del PR:
 
