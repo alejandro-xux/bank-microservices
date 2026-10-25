@@ -92,8 +92,9 @@ class SchemaIntegrationTest extends PostgresIntegrationTest {
 
     private UUID insertTransfer(UUID idempotencyKey, UUID from, UUID to) {
         UUID id = UUID.randomUUID();
+        // status sin valor por defecto desde V4 (BANK-78): toda transferencia nueva dice en qué estado está
         jdbc.update("insert into transfer (id, idempotency_key, request_hash, requested_by, from_account_id, "
-                        + "to_account_id, amount, currency, created_at) values (?, ?, 'h', 'oid', ?, ?, 80.00, 'PEN', now())",
+                        + "to_account_id, amount, currency, created_at, status) values (?, ?, 'h', 'oid', ?, ?, 80.00, 'PEN', now(), 'COMPLETED')",
                 id, idempotencyKey, from, to);
         return id;
     }

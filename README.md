@@ -281,23 +281,42 @@ curl -i -X POST http://localhost:8082/transfers -H "Authorization: Bearer $TOKEN
 
 | Caso | Respuesta |
 |---|---|
-| Transferencia hecha | 201 |
-| Reintento con la misma clave y los mismos datos | 201 con la misma transferencia + `Idempotent-Replayed: true` (no mueve dinero otra vez) |
+| El core registró el asiento | 201, `status: COMPLETED` |
+| El core no respondió a tiempo (o está caído) | 202, `status: PENDING`: el débito está hecho y se resuelve sola |
+| El core la rechazó | 422 con `transferId`, `transferStatus: FAILED` y `reason` (código del core): el dinero ya volvió a la cuenta |
+| Reintento con la misma clave y los mismos datos | la misma transferencia en su estado de ahora + `Idempotent-Replayed: true` (no mueve dinero otra vez) |
 | Misma clave con otros datos | 409 |
 | Falta la clave, monto inválido, misma cuenta o número de destino mal tipeado (dígito verificador) | 400 |
 | Cuenta origen ajena o inexistente (cliente) | 403 |
 | Fondos insuficientes, monedas distintas, destino inexistente o no activo | 422 (la clave queda libre para reintentar) |
 
-- Todo en una transacción: el registro `transfer`, los dos saldos y los dos movimientos (`DEBIT` y `CREDIT`), o nada.
+`GET /transfers/{id}`: en qué quedó (el dueño de la cuenta origen o el asesor; un cliente recibe el mismo 403 si es de otro o si no existe).
+
+**SAGA con el core bancario** (BANK-78, spike BANK-74): una transferencia queda completa solo cuando el core registra el asiento contable.
+
+```
+POST /transfers
+  ├─ T1: candados · débito en el origen · transfer PENDING (con su id-op para el core)
+  ├─ asiento en el core, fuera de toda transacción
+  │     ├─ registrado → T2: crédito en el destino · COMPLETED · outbox TransferCompleted   → 201
+  │     ├─ rechazado  → T2: REVERSAL en el origen · FAILED                                 → 422
+  │     └─ sin respuesta → sigue PENDING                                                   → 202
+```
+
+- **Un timeout no es un rechazo**: el core pudo haber registrado el asiento aunque la respuesta no llegara. Devolver el dinero en ese momento lo dejaría en dos lugares a la vez.
+- **El destino no recibe nada hasta que el core confirma**, y la compensación es un movimiento `REVERSAL`: el débito no se borra, el historial cuenta que el dinero salió y volvió.
+- **Una transferencia se resuelve una sola vez**: la transición es `UPDATE … WHERE status = 'PENDING'` y solo quien la gana mueve dinero. Sin esa condición, dos procesos acreditaron dos veces.
+- **El dinero en tránsito existe**: con pendientes, la suma de saldos baja. La regla que vigilan las pruebas es **saldos + pendientes = constante**; mirar cuenta por cuenta no alcanza, porque en el caso del crédito doble cada cuenta seguía cuadrando con sus movimientos.
+- Medido en local: `POST /transfers` pasó de p50 6,7–7,9 ms a 13,4–14,7 ms (la segunda transacción con candados y outbox, el asiento por el adaptador y la relectura); justo después de reiniciar el servicio, 25–27 ms.
 - Las dos cuentas se bloquean (`FOR UPDATE`) siempre en el mismo orden, el id menor primero. Así dos transferencias cruzadas (A→B y B→A) no se bloquean entre sí: con el orden de la petición, PostgreSQL detecta *deadlock detected*.
 - La clave se reclama con un `INSERT` antes de tocar los saldos. Un doble clic simultáneo choca con el `UNIQUE` y responde la transferencia del primero.
 
 **Core bancario** (BANK-77, Anti-Corruption Layer): accounts-service habla con el mainframe emulado (`CORE_BANKING_URL`, por defecto `http://localhost:8089`, plazo `CORE_BANKING_TIMEOUT` de 2 s) sin que su formato entre al dominio. El dominio solo ve `CoreBanking` (asiento y consulta) con números de cuenta y montos propios; `corebanking/mainframe` arma y lee las tramas de largo fijo y traduce cuentas (`001-0000000001-6` ↔ `00100000000016`) y montos (`100.00` ↔ céntimos). Un timeout, un core caído o una respuesta ilegible dan **desconocido**, nunca rechazo: el core pudo haber registrado el asiento.
 
-**Evento de cada transferencia** (BANK-69, Transactional Outbox): la misma transacción guarda `TransferCompleted` (`contracts/transfer_events.proto`) en la tabla `outbox` (migración V3). Si hay ROLLBACK no queda evento; si hay COMMIT, el evento existe sí o sí. Un relay lo publica después en `bank.transfers.v1`, con la cuenta origen como clave.
+**Evento de cada transferencia** (BANK-69, Transactional Outbox): la transacción que completa la transferencia (T2 desde BANK-78) guarda `TransferCompleted` (`contracts/transfer_events.proto`) en la tabla `outbox` (migración V3). Si hay ROLLBACK no queda evento; si hay COMMIT, el evento existe sí o sí. Un relay lo publica después en `bank.transfers.v1`, con la cuenta origen como clave.
 
 ```
-POST /transfers ─▶ 1 transacción: transfer + 2 saldos + 2 movimientos + fila en outbox ─▶ 201
+T2 de una transferencia completada ─▶ crédito + fila en outbox (COMMIT)
 relay (cada 500 ms, lotes de 100) ─▶ Kafka (acks=all) ─▶ marca la fila como publicada
 ```
 

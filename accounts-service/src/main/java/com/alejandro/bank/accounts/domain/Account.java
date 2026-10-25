@@ -79,6 +79,19 @@ public class Account {
         updatedAt = Instant.now();
     }
 
+    // ¿Puede recibir una transferencia? (BANK-78): se pregunta en T1, antes de mandar el asiento al core
+    public void checkCanReceive() {
+        requireActive();
+    }
+
+    // Entrada de dinero que ya está decidida (BANK-78): el crédito de una transferencia que el core confirmó, o la
+    // reversa de una que rechazó. No pide que la cuenta siga activa: el dinero ya salió del otro lado y el core ya
+    // registró (o anuló) el asiento; si la cuenta se bloqueó mientras tanto, igual tiene que recibirlo
+    public void receiveSettled(BigDecimal amount) {
+        balance = balance.add(amount);
+        updatedAt = Instant.now();
+    }
+
     // Salida de dinero (débito de una transferencia, BANK-56): activa y con fondos suficientes.
     // El CHECK (balance >= 0) de la base es la última barrera si esta regla fallara
     public void withdraw(BigDecimal amount) {

@@ -31,7 +31,12 @@ import org.springframework.grpc.server.security.GrpcSecurity;
 import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.security.oauth2.jwt.JwtDecoder;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
+import org.springframework.test.context.DynamicPropertyRegistry;
+import org.springframework.test.context.DynamicPropertySource;
+import org.testcontainers.containers.GenericContainer;
+import org.testcontainers.containers.wait.strategy.Wait;
 import org.testcontainers.kafka.KafkaContainer;
+import org.testcontainers.utility.MountableFile;
 import org.testcontainers.postgresql.PostgreSQLContainer;
 
 import java.time.Instant;
@@ -44,8 +49,8 @@ import java.util.concurrent.atomic.AtomicReference;
 
 import static org.mockito.Mockito.when;
 
-// Base de las pruebas de integración: un PostgreSQL y un Kafka reales (mismas versiones que
-// infra/docker-compose.yml) y un customers-service simulado como servidor gRPC EN MEMORIA (mismo contrato, contracts/customers.proto),
+// Base de las pruebas de integración: un PostgreSQL, un Kafka y el mainframe emulado reales (mismas versiones y
+// mappings que infra/docker-compose.yml) y un customers-service simulado como servidor gRPC EN MEMORIA (mismo contrato, contracts/customers.proto),
 // compartidos por todas las clases que heredan de aquí porque usan el mismo contexto de Spring.
 // El JwtDecoder es simulado: estas pruebas no necesitan Keycloak (la validación real del token contra
 // Keycloak se prueba en customers-service)
@@ -80,18 +85,33 @@ public abstract class PostgresIntegrationTest {
     protected static final KafkaContainer KAFKA = new KafkaContainer("apache/kafka:4.3.1")
             .withEnv("KAFKA_AUTO_CREATE_TOPICS_ENABLE", "false");
 
+    // El core bancario (BANK-78): el mismo WireMock y los mismos mappings que el compose, con sus reglas por céntimos
+    // (.13 rechazo, .99 lento pero registrado, .98 core caído)
+    protected static final GenericContainer<?> CORE_BANKING = new GenericContainer<>("wiremock/wiremock:3.13.2")
+            .withCommand("--global-response-templating", "--disable-banner")
+            .withCopyFileToContainer(MountableFile.forHostPath("../infra/core-banking-mock/mappings"), "/home/wiremock/mappings")
+            .withExposedPorts(8080)
+            .waitingFor(Wait.forHttp("/__admin/health"));
+
     // Último authorization que recibió el customers-service simulado en la metadata (token relay)
     protected static final AtomicReference<String> RECEIVED_AUTHORIZATION = new AtomicReference<>();
 
     static {
         POSTGRES.start();
         KAFKA.start();
+        CORE_BANKING.start();
         try (AdminClient admin = AdminClient.create(Map.of(AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG, KAFKA.getBootstrapServers()))) {
             admin.createTopics(List.of(new NewTopic(TransferTopics.TOPIC, 3, (short) 1),
                     new NewTopic(TransferTopics.DEAD_LETTER_TOPIC, 3, (short) 1))).all().get();
         } catch (Exception ex) {
             throw new IllegalStateException("No se pudieron crear los topics de prueba", ex);
         }
+    }
+
+    // Las propiedades dinámicas ganan a las de config-repo (que se importan y pisarían a application-test.yaml)
+    @DynamicPropertySource
+    static void coreBanking(DynamicPropertyRegistry registry) {
+        registry.add("bank.core-banking.url", () -> "http://" + CORE_BANKING.getHost() + ":" + CORE_BANKING.getMappedPort(8080));
     }
 
     @MockitoBean

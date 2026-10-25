@@ -7,6 +7,8 @@ import com.alejandro.bank.accounts.exception.CustomersUnavailableException;
 import com.alejandro.bank.accounts.exception.IdempotencyKeyConflictException;
 import com.alejandro.bank.accounts.exception.InsufficientFundsException;
 import com.alejandro.bank.accounts.exception.SameAccountException;
+import com.alejandro.bank.accounts.exception.TransferFailedException;
+import com.alejandro.bank.accounts.exception.TransferNotFoundException;
 import com.alejandro.bank.accounts.exception.TransferRejectedException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ProblemDetail;
@@ -84,6 +86,27 @@ public class GlobalExceptionHandler {
     public ProblemDetail handleAccountNotFound(AccountNotFoundException ex) {
         ProblemDetail problem = ProblemDetail.forStatusAndDetail(HttpStatus.NOT_FOUND, ex.getMessage());
         problem.setTitle("Recurso no encontrado");
+        return problem;
+    }
+
+    // 404: la transferencia no existe (solo lo recibe el asesor, BANK-78)
+    @ExceptionHandler(TransferNotFoundException.class)
+    public ProblemDetail handleTransferNotFound(TransferNotFoundException ex) {
+        ProblemDetail problem = ProblemDetail.forStatusAndDetail(HttpStatus.NOT_FOUND, ex.getMessage());
+        problem.setTitle("Recurso no encontrado");
+        return problem;
+    }
+
+    // 422: el core rechazó la transferencia y el dinero volvió al origen (BANK-78). Lleva el id y el estado: el
+    // cliente puede consultarla después con GET /transfers/{id}
+    @ExceptionHandler(TransferFailedException.class)
+    public ProblemDetail handleTransferFailed(TransferFailedException ex) {
+        ProblemDetail problem = ProblemDetail.forStatusAndDetail(HttpStatus.UNPROCESSABLE_CONTENT, ex.getMessage());
+        problem.setTitle("Transferencia rechazada por el core bancario");
+        problem.setProperty("transferId", ex.getTransfer().getId());
+        // "transferStatus" y no "status": ese campo es del ProblemDetail (el código HTTP, RFC 9457)
+        problem.setProperty("transferStatus", ex.getTransfer().getStatus());
+        problem.setProperty("reason", ex.getTransfer().getFailureReason());
         return problem;
     }
 
