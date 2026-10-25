@@ -24,6 +24,23 @@ infra/stop-local.sh     # apaga los servicios (con --all también los contenedor
 
 Espera a que cada pieza esté sana antes de seguir, salta las que ya están corriendo y termina cuando el gateway ya enruta a customers-service (~1 minuto desde cero). Los logs de cada servicio quedan en `.local/logs/`. Las secciones siguientes explican cada pieza por separado.
 
+### Datos de prueba (BANK-75)
+Si la base de accounts está vacía (primer arranque o después de `--all`), `start-local.sh` corre `infra/seed-local.sh`, que abre por la API, como un asesor, las cuentas con las que probamos:
+
+| Número | Cliente | Moneda | Saldo inicial |
+|---|---|---|---|
+| `001-0000000001-6` | Ana | PEN | 1580.50 |
+| `001-0000000002-4` | Ana | USD | 250.00 |
+| `001-0000000003-2` | cliente destino (`08d38a3b-…`) | PEN | 370.00 |
+| `001-0000000004-0` | Ana | USD | 0.00 |
+
+```bash
+infra/seed-local.sh --show                          # número → id (los ids cambian cada vez que la base empieza de cero)
+infra/stop-local.sh --all && infra/start-local.sh   # volver a los datos de prueba
+```
+
+**Qué borra `stop-local.sh --all`**: ningún contenedor tiene volumen, así que se pierden las cuentas y su historial (transferencias, movimientos, outbox), los avisos registrados por notifications, los eventos y offsets de Kafka, la caché de Redis y los correos de Mailpit. Keycloak se recrea desde `infra/keycloak/bank-realm.json` y los clientes viven en Cosmos (Azure): esos no se pierden. El seed es idempotente: con las cuentas ya creadas no hace nada, y nunca mueve dinero en una base que ya tiene cuentas.
+
 La infraestructura corre en Docker: Redis en el puerto **6380**, PostgreSQL en el **5433** y Kafka en el **9094** (los estándar 6379, 5432 y 9092 pueden estar ocupados por otros proyectos), Keycloak en el **8180** y Mailpit en el **1025** (SMTP) y el **8025** (web). Ninguno guarda datos al hacer `down`: la próxima vez arrancan vacíos.
 
 ```bash

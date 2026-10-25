@@ -113,6 +113,9 @@ wait_route() {
 wait_route customers /api/customers/no-existe
 wait_route accounts /api/accounts/00000000-0000-4000-8000-000000000000
 
+# Con la base vacía (primer arranque o después de --all), las cuentas de prueba con números y saldos fijos (BANK-75)
+"$ROOT/infra/seed-local.sh" --if-empty
+
 cat <<EOF
 
 ✅ Entorno local listo
@@ -124,6 +127,7 @@ cat <<EOF
    Keycloak        http://localhost:8180/admin  (admin / admin)
    Kafka           localhost:9094  (topics bank.transfers.v1 y bank.transfers.v1.DLT)
    Correos         http://localhost:8025  (Mailpit)
+   Datos de prueba infra/seed-local.sh --show  (número → id de cada cuenta)
    Logs            $LOGS
    Apagar          infra/stop-local.sh   (con --all también los contenedores de Docker)
 EOF
