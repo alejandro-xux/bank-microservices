@@ -4,6 +4,7 @@ import com.alejandro.bank.accounts.domain.Account;
 import com.alejandro.bank.accounts.domain.Currency;
 import com.alejandro.bank.accounts.domain.Movement;
 import com.alejandro.bank.accounts.domain.Transfer;
+import com.alejandro.bank.accounts.domain.TransferStatus;
 import com.alejandro.bank.accounts.exception.SameAccountException;
 import com.alejandro.bank.accounts.exception.TransferRejectedException;
 import com.alejandro.bank.accounts.outbox.OutboxStore;
@@ -16,11 +17,13 @@ import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
+import java.time.Instant;
 import java.util.UUID;
 
-// La transacción de una transferencia (spike BANK-51). Es una clase aparte de TransferService porque
-// @Transactional solo actúa al llamarla desde otra clase: así TransferService puede atrapar el choque
-// con el UNIQUE de la clave DESPUÉS de que esta transacción se deshizo, y releer en otra
+// Las transacciones de la SAGA de una transferencia (BANK-78, spike BANK-74; antes una sola, BANK-51/56). Es una
+// clase aparte de TransferService porque @Transactional solo actúa al llamarla desde otra clase: así el orquestador
+// puede atrapar el choque con el UNIQUE de la clave DESPUÉS de que T1 se deshizo, y llamar al core entre T1 y T2
+// sin ninguna transacción abierta (D2: ningún candado de cuenta queda tomado mientras se espera a la red)
 @Component
 @RequiredArgsConstructor
 public class TransferExecutor {
@@ -30,11 +33,16 @@ public class TransferExecutor {
     private final MovementRepository movementRepository;
     private final OutboxStore outbox;
 
-    // Todo o nada: el registro transfer, los dos saldos, los dos movimientos y el evento del outbox. Cualquier excepción
-    // (reglas, fondos, choque de la clave) hace ROLLBACK, y entonces la clave queda libre
+    // Lo que necesita el orquestador para el asiento: la transferencia y los números de las dos cuentas
+    public record Started(Transfer transfer, String fromAccountNumber, String toAccountNumber) {
+    }
+
+    // T1: todo o nada. Reclama la clave, valida, bloquea y debita SOLO el origen (D3: el destino recibe el dinero
+    // cuando el core confirma). La transferencia queda PENDING. Cualquier excepción (reglas, fondos, choque de la
+    // clave) hace ROLLBACK, y entonces la clave queda libre
     @Transactional
-    public Transfer execute(UUID idempotencyKey, String requestHash, String requestedBy,
-                            UUID fromAccountId, String toAccountNumber, BigDecimal amount) {
+    public Started start(UUID idempotencyKey, String requestHash, String requestedBy,
+                         UUID fromAccountId, String toAccountNumber, BigDecimal amount) {
         // 1. Datos para decidir, con proyecciones: ninguna cuenta queda cargada antes de su candado
         UUID toAccountId = accountRepository.findIdByNumber(toAccountNumber)
                 .orElseThrow(() -> TransferRejectedException.destinationNotFound(toAccountNumber));
@@ -46,32 +54,65 @@ public class TransferExecutor {
 
         // 2. Reclamar la clave: el INSERT va ya (flush). Otra petición con la misma clave espera aquí,
         // en el índice UNIQUE, y al terminar esta choca con él sin haber tocado ningún saldo
-        Transfer transfer = transferRepository.saveAndFlush(Transfer.create(
-                idempotencyKey, requestHash, requestedBy, fromAccountId, toAccountId, amount, currency));
+        Transfer transfer = transferRepository.saveAndFlush(Transfer.create(idempotencyKey, requestHash, requestedBy,
+                fromAccountId, toAccountId, amount, currency, transferRepository.nextCoreOperation()));
 
-        // 3. Candados en orden fijo (siempre el id menor primero), no en el de la petición: dos
-        // transferencias cruzadas (A→B y B→A) piden las filas en el mismo orden y nunca se bloquean
-        // entre sí (deadlock)
+        // 3. Candados en orden fijo y reglas con las filas ya bloqueadas. El destino tiene que poder recibir HOY:
+        // no tiene sentido mandar al core una transferencia a una cuenta bloqueada
+        Locked accounts = lockBoth(fromAccountId, toAccountId);
+        if (accounts.from().getCurrency() != accounts.to().getCurrency()) {
+            throw TransferRejectedException.currencyMismatch();
+        }
+        accounts.to().checkCanReceive();
+        accounts.from().withdraw(amount);
+        movementRepository.save(Movement.debit(fromAccountId, amount, accounts.from().getBalance(), transfer.getId()));
+        return new Started(transfer, accounts.from().getNumber(), accounts.to().getNumber());
+    }
+
+    // T2 cuando el core registró el asiento: COMPLETED, crédito en el destino y el evento. false si la transferencia
+    // ya estaba resuelta (otro proceso ganó la transición): entonces no se mueve nada
+    @Transactional
+    public boolean complete(UUID transferId) {
+        Instant now = Instant.now();
+        if (transferRepository.resolve(transferId, TransferStatus.COMPLETED, null, now) == 0) {
+            return false;
+        }
+        Transfer transfer = transferRepository.findById(transferId).orElseThrow();
+        Locked accounts = lockBoth(transfer.getFromAccountId(), transfer.getToAccountId());
+        accounts.to().receiveSettled(transfer.getAmount());
+        movementRepository.save(Movement.credit(transfer.getToAccountId(), transfer.getAmount(),
+                accounts.to().getBalance(), transferId));
+        // El evento sale solo con la transferencia confirmada (Transactional Outbox, BANK-69), con las dos cuentas
+        // bloqueadas: así su seq respeta el orden de cada cuenta
+        outbox.save(TransferCompletedEvents.of(transfer, accounts.from(), accounts.to(), now));
+        return true;
+    }
+
+    // T2 cuando el core la rechazó: FAILED y el dinero vuelve al origen con un movimiento REVERSAL (S3). false si ya
+    // estaba resuelta
+    @Transactional
+    public boolean fail(UUID transferId, String reason) {
+        if (transferRepository.resolve(transferId, TransferStatus.FAILED, reason, Instant.now()) == 0) {
+            return false;
+        }
+        Transfer transfer = transferRepository.findById(transferId).orElseThrow();
+        Locked accounts = lockBoth(transfer.getFromAccountId(), transfer.getToAccountId());
+        accounts.from().receiveSettled(transfer.getAmount());
+        movementRepository.save(Movement.reversal(transfer.getFromAccountId(), transfer.getAmount(),
+                accounts.from().getBalance(), transferId));
+        return true;
+    }
+
+    private record Locked(Account from, Account to) {
+    }
+
+    // Candados en orden fijo (siempre el id menor primero), no en el de la transferencia: dos transferencias cruzadas
+    // (A→B y B→A) piden las filas en el mismo orden y nunca se bloquean entre sí (deadlock)
+    private Locked lockBoth(UUID fromAccountId, UUID toAccountId) {
         boolean fromFirst = fromAccountId.compareTo(toAccountId) < 0;
         Account first = lock(fromFirst ? fromAccountId : toAccountId);
         Account second = lock(fromFirst ? toAccountId : fromAccountId);
-        Account from = fromFirst ? first : second;
-        Account to = fromFirst ? second : first;
-
-        // 4. Reglas con las filas ya bloqueadas, y el movimiento del dinero
-        if (from.getCurrency() != to.getCurrency()) {
-            throw TransferRejectedException.currencyMismatch();
-        }
-        from.withdraw(amount);
-        to.deposit(amount);
-        movementRepository.save(Movement.debit(from.getId(), amount, from.getBalance(), transfer.getId()));
-        movementRepository.save(Movement.credit(to.getId(), amount, to.getBalance(), transfer.getId()));
-
-        // 5. El evento, en esta misma transacción (Transactional Outbox, BANK-69): con ROLLBACK no queda;
-        // con COMMIT existe sí o sí y OutboxRelay lo publica. Va al final, con las dos cuentas bloqueadas:
-        // así su seq respeta el orden en que se movió el dinero de cada cuenta
-        outbox.save(TransferCompletedEvents.of(transfer, from, to));
-        return transfer;
+        return fromFirst ? new Locked(first, second) : new Locked(second, first);
     }
 
     private Account lock(UUID id) {

@@ -7,6 +7,7 @@ import com.alejandro.bank.contracts.transfers.v1.TransferTopics;
 import com.google.protobuf.Timestamp;
 
 import java.math.RoundingMode;
+import java.time.Instant;
 import java.util.UUID;
 
 // De una transferencia ya registrada al mensaje del outbox con su evento TransferCompleted (BANK-69).
@@ -16,7 +17,7 @@ public final class TransferCompletedEvents {
     private TransferCompletedEvents() {
     }
 
-    public static OutboxStore.Message of(Transfer transfer, Account from, Account to) {
+    public static OutboxStore.Message of(Transfer transfer, Account from, Account to, Instant completedAt) {
         UUID eventId = UUID.randomUUID();
         TransferCompleted event = TransferCompleted.newBuilder()
                 .setEventId(eventId.toString())
@@ -30,9 +31,10 @@ public final class TransferCompletedEvents {
                 // Siempre con 2 decimales, como en la API ("150.00", no "150")
                 .setAmount(transfer.getAmount().setScale(2, RoundingMode.UNNECESSARY).toPlainString())
                 .setCurrency(transfer.getCurrency().name())
+                // Cuando el core la confirmó (BANK-78), no cuando se pidió
                 .setCompletedAt(Timestamp.newBuilder()
-                        .setSeconds(transfer.getCreatedAt().getEpochSecond())
-                        .setNanos(transfer.getCreatedAt().getNano()))
+                        .setSeconds(completedAt.getEpochSecond())
+                        .setNanos(completedAt.getNano()))
                 .build();
         // Clave = cuenta origen: sus eventos caen en la misma partición y conservan el orden
         return new OutboxStore.Message(eventId, TransferTopics.TRANSFER_COMPLETED, from.getId().toString(),

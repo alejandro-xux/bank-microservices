@@ -57,6 +57,10 @@ public class AccountAccessPolicy {
         }
     }
 
+    public boolean isAdmin(Authentication authentication) {
+        return hasRole(authentication, SecurityConfig.ADMIN);
+    }
+
     private static boolean hasRole(Authentication authentication, String role) {
         return authentication.getAuthorities().stream()
                 .anyMatch(authority -> (ROLE_PREFIX + role).equals(authority.getAuthority()));

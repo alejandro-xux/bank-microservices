@@ -17,7 +17,8 @@ public interface MovementRepository extends JpaRepository<Movement, UUID> {
 
     // Historial de una cuenta en UNA sentencia (BANK-57): la otra cuenta de cada transferencia sale
     // del mismo JOIN, sin una consulta por movimiento (N+1). LEFT JOIN para no perder los depósitos
-    // (no tienen transferencia). DEBIT → la otra es el destino; CREDIT → el origen. El id desempata
+    // (no tienen transferencia). DEBIT y REVERSAL → la otra es el destino (la reversa muestra a qué cuenta iba el
+    // dinero que volvió, BANK-78); CREDIT → el origen. El id desempata
     // fechas iguales, así cada movimiento cae en una sola página. Usa idx_movement_account_created.
     // La segunda sentencia (countQuery) da el total de páginas
     @Query(value = """
@@ -26,7 +27,8 @@ public interface MovementRepository extends JpaRepository<Movement, UUID> {
             from Movement m
             left join Transfer t on t.id = m.transferId
             left join Account other on other.id = case
-                when m.type = com.alejandro.bank.accounts.domain.MovementType.DEBIT then t.toAccountId
+                when m.type in (com.alejandro.bank.accounts.domain.MovementType.DEBIT,
+                                com.alejandro.bank.accounts.domain.MovementType.REVERSAL) then t.toAccountId
                 else t.fromAccountId end
             where m.accountId = :accountId
             order by m.createdAt desc, m.id desc

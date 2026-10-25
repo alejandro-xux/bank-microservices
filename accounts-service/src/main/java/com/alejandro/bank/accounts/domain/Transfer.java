@@ -54,9 +54,25 @@ public class Transfer {
     @Column(name = "created_at")
     private Instant createdAt;
 
+    // SAGA con el core (BANK-78). El estado solo cambia con TransferRepository.resolve (PENDING → X)
+    @Enumerated(EnumType.STRING)
+    private TransferStatus status;
+
+    // Código del core cuando la rechaza (por ejemplo 057)
+    @Column(name = "failure_reason")
+    private String failureReason;
+
+    @Column(name = "resolved_at")
+    private Instant resolvedAt;
+
+    // Número con el que el core reconoce el asiento (id-op): lo da la secuencia core_operation_seq
+    @Column(name = "core_operation")
+    private Long coreOperation;
+
     // BANK-56: requestHash es la huella de los datos de la petición (origen, destino y monto)
     public static Transfer create(UUID idempotencyKey, String requestHash, String requestedBy,
-                                  UUID fromAccountId, UUID toAccountId, BigDecimal amount, Currency currency) {
+                                  UUID fromAccountId, UUID toAccountId, BigDecimal amount, Currency currency,
+                                  long coreOperation) {
         Transfer transfer = new Transfer();
         transfer.idempotencyKey = idempotencyKey;
         transfer.requestHash = requestHash;
@@ -66,6 +82,8 @@ public class Transfer {
         transfer.amount = amount;
         transfer.currency = currency;
         transfer.createdAt = Instant.now();
+        transfer.status = TransferStatus.PENDING;
+        transfer.coreOperation = coreOperation;
         return transfer;
     }
 

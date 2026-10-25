@@ -74,6 +74,12 @@ public class Movement {
         return of(accountId, MovementType.CREDIT, amount, balanceAfter, transferId);
     }
 
+    // Compensación de una transferencia rechazada por el core (BANK-78, S3): el dinero vuelve al origen con un
+    // movimiento propio, así el historial cuenta lo que pasó (salió y volvió)
+    public static Movement reversal(UUID accountId, BigDecimal amount, BigDecimal balanceAfter, UUID transferId) {
+        return of(accountId, MovementType.REVERSAL, amount, balanceAfter, transferId);
+    }
+
     private static Movement of(UUID accountId, MovementType type, BigDecimal amount, BigDecimal balanceAfter,
                                UUID transferId) {
         Movement movement = new Movement();
