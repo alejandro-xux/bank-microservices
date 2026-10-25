@@ -1,0 +1,24 @@
+{
+  "name": "Asiento lento: céntimos .99 → responde a los 5 s, pero queda registrado",
+  "priority": 1,
+  "request": {
+    "method": "POST",
+    "url": "/core/asientos",
+    "bodyPatterns": [
+      {
+        "matches": "^TRX.{57}\\d{13}99$"
+      }
+    ]
+  },
+  "response": {
+    "status": 200,
+    "headers": {
+      "Content-Type": "text/plain"
+    },
+    "body": "{{regexExtract request.body '^(?:TRX|QRY)(.{14})(.{12})(?:.{28})?(.{3})(.{15})$' 'p'}}000TRX{{p.0}}{{p.1}}{{p.2}}{{p.3}}OK",
+    "transformers": [
+      "response-template"
+    ],
+    "fixedDelayMilliseconds": 5000
+  }
+}
