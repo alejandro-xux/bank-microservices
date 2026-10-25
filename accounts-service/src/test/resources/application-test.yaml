@@ -6,6 +6,18 @@ spring:
       - file:../config-repo/application.yml
       - file:../config-repo/accounts-service.yml
 
+  # Cuenta las sentencias SQL que prepara Hibernate: la prueba del historial demuestra que no hay N+1
+  # (solo en pruebas: en producción las estadísticas cuestan rendimiento)
+  jpa:
+    properties:
+      hibernate:
+        generate_statistics: true
+
+# El resumen de estadísticas que Hibernate escribe al cerrar cada sesión: demasiado ruido en las pruebas
+logging:
+  level:
+    org.hibernate.engine.internal.StatisticalLoggingSessionEventListener: warn
+
 # Las pruebas no se registran en Eureka (no necesitan el discovery-server)
 eureka:
   client:

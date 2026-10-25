@@ -2,10 +2,13 @@ package com.alejandro.bank.accounts.web;
 
 import com.alejandro.bank.accounts.service.AccountService;
 import com.alejandro.bank.accounts.service.DepositService;
+import com.alejandro.bank.accounts.service.MovementService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
+import jakarta.validation.constraints.Max;
+import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.Pattern;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
@@ -31,6 +34,7 @@ public class AccountController {
 
     private final AccountService accountService;
     private final DepositService depositService;
+    private final MovementService movementService;
 
     @PostMapping
     @Operation(summary = "Abrir una cuenta para un cliente (solo asesor)")
@@ -84,5 +88,21 @@ public class AccountController {
     public ResponseEntity<MovementResponse> deposit(@PathVariable UUID id, @Valid @RequestBody DepositRequest request) {
         return ResponseEntity.status(HttpStatus.CREATED)
                 .body(MovementResponse.from(depositService.deposit(id, request.amount())));
+    }
+
+    @GetMapping("/{id}/movements")
+    @Operation(summary = "Historial de movimientos, del más reciente al más antiguo (el asesor cualquiera; el cliente solo las suyas)")
+    @ApiResponse(responseCode = "200", description = "Una página de movimientos; en una transferencia, la otra cuenta enmascarada")
+    @ApiResponse(responseCode = "400", description = "page < 0, o size fuera de 1..50")
+    @ApiResponse(responseCode = "403", description = "La cuenta no es del cliente (o no existe)")
+    @ApiResponse(responseCode = "404", description = "La cuenta no existe (solo asesor)")
+    @ApiResponse(responseCode = "503", description = "No se pudo consultar el cliente")
+    public MovementPageResponse movements(
+            @PathVariable UUID id,
+            @RequestParam(defaultValue = "0") @Min(value = 0, message = "debe ser 0 o mayor") int page,
+            @RequestParam(defaultValue = "20") @Min(value = 1, message = "debe ser al menos 1")
+            @Max(value = 50, message = "debe ser como máximo 50") int size,
+            Authentication authentication) {
+        return MovementPageResponse.from(movementService.history(id, page, size, authentication));
     }
 }
