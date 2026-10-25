@@ -44,6 +44,11 @@ spring:
 bank:
   customers:
     deadline: ${CUSTOMERS_DEADLINE:2s}
+  # Core bancario (mainframe emulado, BANK-76/77). En local, el WireMock del compose; en un banco real, IBM MQ o
+  # z/OS Connect frente al core. Pasado el plazo, el resultado es "desconocido", nunca un rechazo
+  core-banking:
+    url: ${CORE_BANKING_URL:http://localhost:8089}
+    timeout: ${CORE_BANKING_TIMEOUT:2s}
   # Relay del outbox (BANK-69): cada 500 ms, lotes de 100
   outbox:
     poll-interval-ms: 500
