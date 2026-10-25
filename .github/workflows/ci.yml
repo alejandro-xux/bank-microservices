@@ -102,15 +102,14 @@ jobs:
 
       - uses: gradle/actions/setup-gradle@3f5f9adaf7d9fecd50b5935e54106014257a94e6 # v6.4.0
 
-      # Las rutas de los jars de cada módulo en esta máquina (tarea sonarLibraries de gradle/quality.gradle), en paralelo.
+      # Las rutas de los jars de cada módulo en esta máquina (tarea sonarLibraries de gradle/quality.gradle), UNO POR UNO:
+      # en paralelo, cinco builds compilaban a la vez el mismo contracts (includeBuild) en la misma carpeta y chocaban.
       # Se agregan a sonar-project.properties (solo en esta copia del repo): son ~125 KB, y como argumento de la action
       # pasarían por una sola variable de entorno, que Linux corta en 128 KB
       - name: Dependencias de cada módulo
         run: |
           modules="contracts customers-service accounts-service notifications-service api-gateway config-server discovery-server"
-          pids=""
-          for m in $modules; do (cd "$m" && ./gradlew -q sonarLibraries --no-daemon) & pids="$pids $!"; done
-          for pid in $pids; do wait "$pid"; done
+          for m in $modules; do (cd "$m" && ./gradlew -q sonarLibraries --no-daemon); done
           # El echo cierra la última ruta de cada módulo: sin él se pegaba con la primera del siguiente
           join() { for m in $modules; do tr ',' '\n' < "$m/build/sonar/$1"; echo; done | grep . | sort -u | paste -sd, -; }
           echo "sonar.java.libraries=$(join libraries.txt)" >> sonar-project.properties
