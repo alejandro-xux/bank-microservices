@@ -23,7 +23,7 @@ dependencies {
 	api platform('com.azure.spring:spring-cloud-azure-dependencies:7.3.0')
 	// Parches de seguridad de Jackson (GHSA-7hhh-6rmp-j9qf y otros); quitar al subir a un Boot que ya los traiga
 	api platform('tools.jackson:jackson-bom:3.1.8')
-	api platform('com.fasterxml.jackson:jackson-bom:2.21.8')
+	api platform('com.fasterxml.jackson:jackson-bom:2.22.4')
 	// gRPC interno (E6): Spring gRPC 1.0.x es la línea para Boot 4.0 (la 1.1 vive en Boot 4.1);
 	// trae grpc-bom 1.77.1 y protobuf-bom 4.33.4 (spike BANK-59)
 	api platform('org.springframework.grpc:spring-grpc-dependencies:1.0.3')
