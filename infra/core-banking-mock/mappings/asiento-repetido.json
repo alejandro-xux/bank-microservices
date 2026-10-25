@@ -1,0 +1,28 @@
+{
+  "metadata": {
+    "comentario": "Mismo id-op otra vez (BANK-90): el core no lo registra de nuevo, responde lo mismo que la primera vez"
+  },
+  "priority": 1,
+  "request": {
+    "method": "POST",
+    "url": "/core/asientos",
+    "bodyPatterns": [
+      {
+        "matches": "^TRX.{72}$"
+      }
+    ],
+    "customMatcher": {
+      "name": "state-matcher",
+      "parameters": {
+        "hasContext": "{{regexExtract request.body '^(?:TRX|QRY).{14}(.{12})' 'k'}}{{k.0}}"
+      }
+    }
+  },
+  "response": {
+    "status": 200,
+    "body": "{{regexExtract request.body '^(?:TRX|QRY)(.{14})(.{12})(?:.{28})?(.{3})(.{15})$' 'p'}}{{regexExtract request.body '^(?:TRX|QRY).{14}(.{12})' 'k'}}{{state context=k.0 property='result'}}TRX{{p.0}}{{p.1}}{{p.2}}{{p.3}}{{state context=k.0 property='estado'}}",
+    "transformers": [
+      "response-template"
+    ]
+  }
+}

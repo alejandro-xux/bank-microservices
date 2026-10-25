@@ -1,6 +1,8 @@
 {
-  "name": "Asiento rechazado: céntimos .13 → 057 RC",
-  "priority": 1,
+  "metadata": {
+    "comentario": "Céntimos .13: el core rechaza (057 RC) y lo recuerda por id-op"
+  },
+  "priority": 2,
   "request": {
     "method": "POST",
     "url": "/core/asientos",
@@ -12,12 +14,24 @@
   },
   "response": {
     "status": 200,
-    "headers": {
-      "Content-Type": "text/plain"
-    },
     "body": "{{regexExtract request.body '^(?:TRX|QRY)(.{14})(.{12})(?:.{28})?(.{3})(.{15})$' 'p'}}057TRX{{p.0}}{{p.1}}{{p.2}}{{p.3}}RC",
     "transformers": [
       "response-template"
     ]
-  }
+  },
+  "serveEventListeners": [
+    {
+      "name": "recordState",
+      "parameters": {
+        "context": "{{regexExtract request.body '^(?:TRX|QRY).{14}(.{12})' 'k'}}{{k.0}}",
+        "state": {
+          "result": "057",
+          "estado": "RC"
+        }
+      },
+      "requestPhases": [
+        "BEFORE_RESPONSE_SENT"
+      ]
+    }
+  ]
 }

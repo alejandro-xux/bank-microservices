@@ -1,6 +1,6 @@
 # core-banking-mock
 
-Un "mainframe" local (BANK-76, spike BANK-74): recibe asientos contables en **tramas de largo fijo** y responde igual, como un core bancario legado que no controlamos. Es WireMock con los mappings de `mappings/`; no tiene estado ni base de datos.
+Un "mainframe" local (BANK-76, spike BANK-74): recibe asientos contables en **tramas de largo fijo** y responde igual, como un core bancario legado que no controlamos. Es WireMock con los mappings de `mappings/` y la extensión de estado de WireMock (BANK-90): **recuerda cada asiento por su id-op**, como un core real. La imagen se arma con el `Dockerfile` de esta carpeta, que baja el jar de la extensión de Maven Central y lo verifica con su sha256. La usan el compose y las pruebas.
 
 En un banco real, el core se alcanza por IBM MQ o por z/OS Connect, que exponen programas CICS cuyos datos están descritos por *copybooks* COBOL de largo fijo. accounts-service habla con este mock por HTTP; cambiar a MQ solo cambiaría su adaptador (el Anti-Corruption Layer), no su dominio.
 
@@ -30,16 +30,20 @@ RESPUESTA                      (52 caracteres)
 
 Una trama de largo incorrecto no coincide con ningún mapping y recibe 404: el mock no adivina.
 
-## Las reglas (por los céntimos del monto)
+## Las reglas
 
-| Céntimos | Asiento | Consulta |
+El **asiento** decide por los céntimos del monto, y el core **recuerda** lo que respondió para ese id-op:
+
+| Céntimos | Asiento | Queda registrado |
 |---|---|---|
-| `.13` | `057 RC` (rechazo) | `057 RC` |
-| `.99` | `000 OK`, pero **a los 5 s** (más que el timeout de accounts): queda registrado | `000 OK` |
-| `.98` | HTTP 500 `091 CORE NO DISPONIBLE`: **no** queda registrado | `025 NF` |
-| cualquier otro | `000 OK` | `000 OK` |
+| `.13` | `057 RC` (rechazo) | sí, como rechazo |
+| `.99` | `000 OK`, pero **a los 5 s** (más que el timeout de accounts) | sí, **al llegar**: el core registra y después contesta tarde |
+| `.98` | HTTP 500 `091 CORE NO DISPONIBLE` | **no** |
+| cualquier otro | `000 OK` | sí |
 
-**Límite:** la consulta responde según estas reglas, sin recordar nada. Si accounts-service se cae justo antes de mandar un asiento de monto normal, la consulta dirá "registrado" aunque nunca llegó (un core real diría "no existe"). El camino "no existe → reenviar" se prueba con `.98`.
+- **La consulta** responde lo que quedó registrado para ese id-op (`000 OK` o `057 RC`), y `025 NF` si el asiento **nunca llegó**, sea cual sea el monto. Antes de BANK-90 respondía por el monto: un asiento que nunca llegó con un monto normal decía "registrado".
+- **El mismo id-op otra vez** responde lo que se registró la primera vez, sin registrar de nuevo ni demorar (idempotente, como un core real). Un `.98` no queda registrado, así que el reenvío vuelve a fallar.
+- **Para las pruebas:** `POST /__estado/borrar` olvida todos los asientos. `PostgresIntegrationTest` lo llama antes de cada prueba. El estado vive en memoria: reiniciar el contenedor también lo borra.
 
 ## Probar a mano
 

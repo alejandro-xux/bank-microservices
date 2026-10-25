@@ -104,14 +104,15 @@ class RecoveryIntegrationTest extends PostgresIntegrationTest {
     }
 
     @Test
-    void aCrashAfterT1AndBeforeThePostingIsResolved() {
-        // accounts-service se cayó después de debitar y antes de mandar el asiento. Límite del mock (BANK-76): sin
-        // estado, su consulta dice "registrado" para un monto normal aunque nunca llegó; un core real diría "no existe"
-        // y el recuperador reenviaría el asiento (ese camino lo prueba aCoreThatNeverReceivedIt…)
+    void aCrashAfterT1AndBeforeThePostingIsResolved() throws Exception {
+        // accounts-service se cayó después de debitar y antes de mandar el asiento. El core no lo recibió (BANK-90: el
+        // mock recuerda por id-op), así que la consulta dice "no existe" y el recuperador reenvía el mismo asiento
         executor.start(UUID.randomUUID(), "h", "oid", anaPen, luisPenNumber, new BigDecimal("50.00"));
 
         assertThat(recovery.recoverPending()).isEqualTo(1);
 
+        assertThat(coreRequests("/core/consultas")).isEqualTo(1);
+        assertThat(coreRequests("/core/asientos")).isEqualTo(1);
         assertThat(statusOf()).isEqualTo("COMPLETED");
         assertThat(balance(anaPen)).isEqualTo("950.00");
         assertThat(balance(luisPen)).isEqualTo("1050.00");
@@ -157,8 +158,9 @@ class RecoveryIntegrationTest extends PostgresIntegrationTest {
 
     @Test
     void twoRecoveriesAtOnceResolveEachPendingTransferOnceAndAskTheCoreOnce() throws Exception {
+        // Cinco caídas antes del asiento: cada pendiente se consulta ("no existe") y se reenvía una vez
         for (int i = 1; i <= 5; i++) {
-            executor.start(UUID.randomUUID(), "h", "oid", anaPen, luisPenNumber, new BigDecimal(i + "0.99"));
+            executor.start(UUID.randomUUID(), "h", "oid", anaPen, luisPenNumber, new BigDecimal(i + "0.41"));
         }
 
         CountDownLatch start = new CountDownLatch(1);
@@ -176,9 +178,10 @@ class RecoveryIntegrationTest extends PostgresIntegrationTest {
         // Una hizo todo y la otra encontró el candado tomado (o nada que hacer si llegó después)
         assertThat(results.stream().filter(r -> r > 0).mapToInt(Integer::intValue).sum()).isEqualTo(5);
         assertThat(jdbc.queryForObject("select count(*) from transfer where status = 'COMPLETED'", Integer.class)).isEqualTo(5);
-        assertThat(balance(luisPen)).isEqualTo("1154.95");
+        assertThat(balance(luisPen)).isEqualTo("1152.05");
         assertThat(events()).isEqualTo(5);
         assertThat(coreRequests("/core/consultas")).isEqualTo(5);
+        assertThat(coreRequests("/core/asientos")).isEqualTo(5);
     }
 
     // ---------------------------------------------------------------------------------------------------

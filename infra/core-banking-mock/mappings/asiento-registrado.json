@@ -1,5 +1,7 @@
 {
-  "name": "Asiento registrado: cualquier trama de 75 caracteres → 000 OK",
+  "metadata": {
+    "comentario": "Cualquier otro monto: el core registra (000 OK) y lo recuerda por id-op"
+  },
   "priority": 5,
   "request": {
     "method": "POST",
@@ -12,12 +14,24 @@
   },
   "response": {
     "status": 200,
-    "headers": {
-      "Content-Type": "text/plain"
-    },
     "body": "{{regexExtract request.body '^(?:TRX|QRY)(.{14})(.{12})(?:.{28})?(.{3})(.{15})$' 'p'}}000TRX{{p.0}}{{p.1}}{{p.2}}{{p.3}}OK",
     "transformers": [
       "response-template"
     ]
-  }
+  },
+  "serveEventListeners": [
+    {
+      "name": "recordState",
+      "parameters": {
+        "context": "{{regexExtract request.body '^(?:TRX|QRY).{14}(.{12})' 'k'}}{{k.0}}",
+        "state": {
+          "result": "000",
+          "estado": "OK"
+        }
+      },
+      "requestPhases": [
+        "BEFORE_RESPONSE_SENT"
+      ]
+    }
+  ]
 }
