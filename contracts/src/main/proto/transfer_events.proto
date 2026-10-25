@@ -30,7 +30,7 @@ message TransferCompleted {
   string to_customer_id = 8;
 
   // Monto en texto con 2 decimales ("150.00"), como en la API: un double perdería centavos
-  string amount = 9;
+  string amount = 12;
   // Código ISO 4217: "PEN" o "USD". Texto y no enum: una moneda nueva no rompe a un consumidor viejo
   string currency = 10;
 
