@@ -14,6 +14,15 @@ programación reactiva, Kafka, Azure y Quarkus.
 | notifications-service | Spring Kafka + Resilience4j |
 
 ## Entorno local
+**En un comando** (Docker encendido y las credenciales de Cosmos en `~/.bank-microservices.env`, o en la ruta que indique `BANK_ENV_FILE`):
+
+```bash
+infra/start-local.sh    # Redis + Keycloak → config-server → discovery-server → customers-service → api-gateway
+infra/stop-local.sh     # apaga los servicios (con --all también Redis y Keycloak)
+```
+
+Espera a que cada pieza esté sana antes de seguir, salta las que ya están corriendo y termina cuando el gateway ya enruta a customers-service (~1 minuto desde cero). Los logs de cada servicio quedan en `.local/logs/`. Las secciones siguientes explican cada pieza por separado.
+
 Redis y Keycloak corren en Docker: Redis en el puerto **6380** (el 6379 puede estar ocupado por otros proyectos) y Keycloak en el **8180**.
 
 ```bash
