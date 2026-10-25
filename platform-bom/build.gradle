@@ -27,6 +27,8 @@ dependencies {
 	// gRPC interno (E6): Spring gRPC 1.0.x es la línea para Boot 4.0 (la 1.1 vive en Boot 4.1);
 	// trae grpc-bom 1.77.1 y protobuf-bom 4.33.4 (spike BANK-59)
 	api platform('org.springframework.grpc:spring-grpc-dependencies:1.0.3')
+	// BDD (BANK-87): escenarios en español que corren con JUnit Platform, en la misma tarea test
+	api platform('io.cucumber:cucumber-bom:8.0.4')
 
 	constraints {
 		api 'org.springdoc:springdoc-openapi-starter-webflux-ui:3.0.3'

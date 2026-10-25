@@ -407,6 +407,17 @@ cd contracts && ./gradlew test        # compatibilidad del contrato en el cable
 Para medir la latencia de la comunicación accounts → customers con el entorno arriba: `cd tests/perf && ./gradlew run` ([detalle](tests/perf/README.md)).
 No necesitan el config-server ni Eureka encendidos (las de customers-service leen `config-repo/` directamente y no se registran) ni credenciales de Azure (Cosmos está simulado), pero sí Docker encendido: Testcontainers levanta Redis para las pruebas de cache y un Keycloak con `infra/keycloak/bank-realm.json` para probar la seguridad con tokens reales (firma, `iss`, `aud`, roles y `oid`), tanto en customers-service como en el api-gateway (este último frente a un customers-service simulado). En accounts-service levanta un PostgreSQL real: se prueban las migraciones, la validación del esquema y sus restricciones; el customers-service simulado es un servidor gRPC en memoria con el mismo contrato.
 
+### Escenarios de negocio (BDD con Cucumber, BANK-87)
+Las reglas de una transferencia están escritas en español en `accounts-service/src/test/resources/features/transferencias.feature`: el core registra, fondos insuficientes, monedas distintas, el core rechaza (REVERSAL), el core no responde (pendiente que termina el recuperador). Cada escenario corre contra la API real con PostgreSQL, Kafka y el mainframe emulado, y comprueba al final que el banco no creó ni perdió dinero. Son parte de `./gradlew test` y de la CI.
+
+```bash
+cd accounts-service
+./gradlew test --tests '*TransferenciasBddTest'   # solo los escenarios
+open build/reports/cucumber/transferencias.html   # el reporte: cada paso en verde o en rojo
+```
+
+Para un escenario nuevo, se escribe el texto en el `.feature` y, si usa una frase nueva, su paso en `bdd/TransferenciaSteps.java`. Los montos se escriben como en la API (`104.13`).
+
 ### CI (GitHub Actions, BANK-83)
 Cada PR a `main` corre `.github/workflows/ci.yml`: las pruebas de los 7 módulos en paralelo, en una máquina Linux de GitHub, con la caché de Gradle. Tarda unos 3 minutos. **No se puede mergear si el check `ci-ok` no está en verde**: es lo que exige la ruleset `protect-main`.
 
