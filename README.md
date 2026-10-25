@@ -163,6 +163,27 @@ curl http://localhost:8082/actuator/health   # "db": UP
 - La base impide lo que no debe pasar aunque el código falle: saldo negativo, `Idempotency-Key` repetida y transferencia a la misma cuenta.
 - Valida el token igual que customers-service (`aud = bank-api`), con 401 y 403 en ProblemDetail. `/actuator/health` es público y la readiness incluye la base.
 
+**Abrir una cuenta** (solo asesor): accounts-service consulta a customers-service con el mismo token antes de escribir nada.
+
+```bash
+TOKEN=$(curl -s -X POST http://localhost:8180/realms/bank/protocol/openid-connect/token \
+  -d grant_type=password -d client_id=bank-cli -d username=asesor -d password=asesor-local \
+  | python3 -c "import sys,json; print(json.load(sys.stdin)['access_token'])")
+curl -i -X POST http://localhost:8082/accounts -H "Authorization: Bearer $TOKEN" -H 'Content-Type: application/json' \
+  -d '{"customerId":"c15a442d-5146-471e-8804-746f4b42253b","type":"AHORROS","currency":"PEN"}'
+# 201 + Location, número 001-NNNNNNNNNN-D (correlativo + dígito Luhn), saldo "0.00" (texto), ACTIVE
+```
+
+| Caso | Respuesta |
+|---|---|
+| Token de cliente (CUSTOMER) | 403 |
+| Campos inválidos o moneda que no existe | 400 |
+| El cliente no existe o está bloqueado | 422 |
+| customers-service caído, con error o más lento que 2 s | 503, sin abrir la cuenta |
+
+- La llamada usa OpenFeign: encuentra a customers-service por su nombre en Eureka y reenvía el `Authorization` (token relay). Los timeouts (1 s para conectar, 2 s para responder) están en `config-repo/accounts-service.yml`.
+- Swagger: http://localhost:8082/swagger-ui.html, con el mismo botón **Authorize** que customers-service (ingresar como `asesor`).
+
 ### Pruebas
 ```bash
 cd customers-service && ./gradlew test

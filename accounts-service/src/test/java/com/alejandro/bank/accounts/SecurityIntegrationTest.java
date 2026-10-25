@@ -76,8 +76,8 @@ class SecurityIntegrationTest extends PostgresIntegrationTest {
                 .expiresAt(Instant.now().plusSeconds(300))
                 .build());
 
-        // Aún no hay endpoints (llegan en BANK-53): pasar la seguridad significa 404, no 401
-        mvc.perform(get("/accounts").header(HttpHeaders.AUTHORIZATION, "Bearer token-de-ana"))
+        // Ruta que no existe: pasar la seguridad significa 404, no 401
+        mvc.perform(get("/no-existe").header(HttpHeaders.AUTHORIZATION, "Bearer token-de-ana"))
                 .andExpect(status().isNotFound());
     }
 
