@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Levanta el entorno local en orden y espera a que cada pieza esté sana (BANK-49):
-#   Docker (Redis, PostgreSQL y Keycloak) → config-server → discovery-server → customers-service
+#   Docker (Redis, PostgreSQL, Keycloak, Kafka y Mailpit) → config-server → discovery-server → customers-service
 #   → accounts-service → api-gateway
 # Uso: infra/start-local.sh          Apagar: infra/stop-local.sh [--all]
 set -euo pipefail
@@ -47,23 +47,37 @@ start() {
   fi
 }
 
-echo "▶ Docker: Redis, PostgreSQL y Keycloak"
+# Espera hasta que el contenedor $1 muestre el estado $2 (salida del --format $3), como máximo $4 segundos
+wait_container() {
+  local name=$1 expected=$2 format=$3 timeout=$4 waited=0
+  until [ "$(docker inspect -f "$format" "$name" 2>/dev/null)" = "$expected" ]; do
+    waited=$((waited + 2))
+    [ "$waited" -ge "$timeout" ] && return 1
+    sleep 2
+  done
+}
+
+echo "▶ Docker: Redis, PostgreSQL, Keycloak, Kafka y Mailpit"
+# kafka-init vuelve a correr en cada arranque: crea solo los topics que falten (--if-not-exists)
 docker compose -f "$ROOT/infra/docker-compose.yml" up -d > /dev/null
 if ! wait_for "http://localhost:8180/realms/bank/.well-known/openid-configuration" 120; then
   echo "✗ Keycloak no respondió en :8180" >&2
   exit 1
 fi
-# PostgreSQL está listo cuando su health check (pg_isready) pasa a healthy
-waited=0
-until [ "$(docker inspect -f '{{.State.Health.Status}}' bank-postgres)" = "healthy" ]; do
-  waited=$((waited + 2))
-  if [ "$waited" -ge 60 ]; then
-    echo "✗ PostgreSQL no respondió en :5433" >&2
+# PostgreSQL, Kafka y Mailpit están listos cuando su health check pasa a healthy
+HEALTH='{{.State.Health.Status}}'
+for container in bank-postgres bank-kafka bank-mailpit; do
+  if ! wait_container "$container" healthy "$HEALTH" 90; then
+    echo "✗ $container no quedó sano: docker logs $container" >&2
     exit 1
   fi
-  sleep 2
 done
-echo "• redis :6380, postgres :5433 y keycloak :8180 listos"
+# Sin topics los servicios no pueden publicar ni consumir: kafka-init tiene que terminar bien (exit 0)
+if ! wait_container bank-kafka-init "exited 0" '{{.State.Status}} {{.State.ExitCode}}' 60; then
+  echo "✗ kafka-init no creó los topics: docker logs bank-kafka-init" >&2
+  exit 1
+fi
+echo "• redis :6380, postgres :5433, keycloak :8180, kafka :9094 (topics listos) y mailpit :8025 listos"
 
 echo "▶ Servicios"
 start config-server 8888 /actuator/health
@@ -102,6 +116,8 @@ cat <<EOF
    Eureka          http://localhost:8761
    Config          http://localhost:8888/customers-service/default
    Keycloak        http://localhost:8180/admin  (admin / admin)
+   Kafka           localhost:9094  (topics bank.transfers.v1 y bank.transfers.v1.DLT)
+   Correos         http://localhost:8025  (Mailpit)
    Logs            $LOGS
-   Apagar          infra/stop-local.sh   (con --all también Redis, PostgreSQL y Keycloak)
+   Apagar          infra/stop-local.sh   (con --all también los contenedores de Docker)
 EOF

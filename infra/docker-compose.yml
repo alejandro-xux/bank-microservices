@@ -47,3 +47,62 @@ services:
       interval: 10s
       timeout: 5s
       retries: 12
+
+  # Bus de eventos (BANK-67, spike BANK-66 K1). Un nodo que es broker y controlador a la vez (KRaft, sin
+  # ZooKeeper). En Azure: Event Hubs Standard o superior (NAMESPACE.servicebus.windows.net:9093, SASL_SSL
+  # con OAUTHBEARER de Entra) o Confluent Cloud; el código no cambia, solo la configuración.
+  # Dos listeners: Kafka le dice al cliente a qué dirección volver, y "localhost" dentro de un contenedor
+  # es el propio contenedor. INTERNAL (kafka:9092) es para la red de Docker; HOST (localhost:9094), para
+  # los servicios que corren con bootRun en la máquina. Sin volumen: --all empieza de cero, igual que PostgreSQL
+  kafka:
+    image: apache/kafka:4.3.1
+    container_name: bank-kafka
+    ports:
+      - "9094:9094"
+    environment:
+      KAFKA_NODE_ID: 1
+      KAFKA_PROCESS_ROLES: broker,controller
+      KAFKA_CONTROLLER_QUORUM_VOTERS: 1@localhost:9093
+      KAFKA_LISTENERS: INTERNAL://:9092,CONTROLLER://:9093,HOST://:9094
+      KAFKA_ADVERTISED_LISTENERS: INTERNAL://kafka:9092,HOST://localhost:9094
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: INTERNAL:PLAINTEXT,CONTROLLER:PLAINTEXT,HOST:PLAINTEXT
+      KAFKA_INTER_BROKER_LISTENER_NAME: INTERNAL
+      KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
+      # Un solo nodo: los topics internos no pueden tener más réplicas que brokers
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
+      # Como en Event Hubs: un nombre de topic mal escrito falla en vez de crear un topic nuevo
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: "false"
+      KAFKA_HEAP_OPTS: "-Xms256m -Xmx512m"
+    healthcheck:
+      test: ["CMD-SHELL", "/opt/kafka/bin/kafka-broker-api-versions.sh --bootstrap-server kafka:9092 > /dev/null 2>&1"]
+      interval: 5s
+      timeout: 10s
+      retries: 20
+
+  # Crea los topics una vez que Kafka está sano y termina (exit 0). En Azure lo hace Terraform/Bicep
+  kafka-init:
+    image: apache/kafka:4.3.1
+    container_name: bank-kafka-init
+    depends_on:
+      kafka:
+        condition: service_healthy
+    entrypoint: ["/bin/bash", "/scripts/create-topics.sh"]
+    volumes:
+      - ./kafka:/scripts:ro
+    restart: "no"
+
+  # Bandeja de correo local (BANK-67): recibe por SMTP en :1025 y muestra los correos en http://localhost:8025.
+  # Guarda en memoria: se vacía al reiniciar. En Azure, un proveedor real (Azure Communication Services Email)
+  mailpit:
+    image: axllent/mailpit:v1.31.4
+    container_name: bank-mailpit
+    ports:
+      - "1025:1025"
+      - "8025:8025"
+    healthcheck:
+      test: ["CMD", "/mailpit", "readyz"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
