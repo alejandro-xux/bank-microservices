@@ -165,13 +165,47 @@ jobs:
         run: |
           "$RUNNER_TEMP/gitleaks" git . --config .gitleaks.toml --no-banner --redact --verbose
 
+  # Contratos (BANK-86): buf compara los .proto con los de main y frena un cambio incompatible (un campo renumerado o
+  # borrado, otro tipo, un RPC quitado). Corre siempre (unos segundos): sin cambios en contracts, no hay nada que frenar
+  buf:
+    name: buf
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      BUF_VERSION: 1.73.0
+      # sha256 publicado en el release oficial (sha256.txt): si el binario no coincide, no se usa
+      BUF_SHA256: 8f2986298ad08f0cc1bf999b9797b7c383adf32d7edf0f73d6f1e1a701baeac1
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+
+      - name: Instalar buf (versión y checksum fijos)
+        run: |
+          curl -sSfL -o "$RUNNER_TEMP/buf" \
+            "https://github.com/bufbuild/buf/releases/download/v${BUF_VERSION}/buf-Linux-x86_64"
+          echo "${BUF_SHA256}  $RUNNER_TEMP/buf" | sha256sum -c -
+          chmod +x "$RUNNER_TEMP/buf"
+
+      - name: Lint
+        run: |
+          "$RUNNER_TEMP/buf" lint contracts
+
+      # En un PR, contra la rama base; en main, contra el commit anterior al push
+      - name: Compatibilidad con la versión anterior
+        env:
+          BASE: ${{ github.event_name == 'pull_request' && github.event.pull_request.base.sha || github.event.before }}
+        run: |
+          echo "Comparando contracts con $BASE"
+          "$RUNNER_TEMP/buf" breaking contracts --against ".git#ref=${BASE},subdir=contracts"
+
   # El único check que exige protect-main: si mañana hay 8 módulos, la ruleset no cambia. Corre SIEMPRE y falla a
   # propósito si la matriz no terminó en success: un job saltado o cancelado cuenta como "pasó" para GitHub
   # Desde BANK-84 también exige el Quality Gate: Sonar tiene que haber pasado, salvo en un PR de un fork o de
-  # Dependabot, donde no puede correr (no hay secrets) y queda "skipped". Desde BANK-85, también gitleaks
+  # Dependabot, donde no puede correr (no hay secrets) y queda "skipped". Desde BANK-85, también gitleaks; desde BANK-86, buf
   ci-ok:
     name: ci-ok
-    needs: [test, sonar, gitleaks]
+    needs: [test, sonar, gitleaks, buf]
     if: always()
     runs-on: ubuntu-latest
     timeout-minutes: 5
@@ -181,9 +215,11 @@ jobs:
           TESTS: ${{ needs.test.result }}
           SONAR: ${{ needs.sonar.result }}
           GITLEAKS: ${{ needs.gitleaks.result }}
+          BUF: ${{ needs.buf.result }}
           SONAR_CANNOT_RUN: ${{ github.actor == 'dependabot[bot]' || (github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository) }}
         run: |
-          echo "Pruebas: $TESTS · Sonar: $SONAR · Sonar no puede correr aquí: $SONAR_CANNOT_RUN · gitleaks: $GITLEAKS"
+          echo "Pruebas: $TESTS · Sonar: $SONAR · Sonar no puede correr aquí: $SONAR_CANNOT_RUN · gitleaks: $GITLEAKS · buf: $BUF"
           test "$TESTS" = "success"
           test "$GITLEAKS" = "success"
+          test "$BUF" = "success"
           test "$SONAR" = "success" || { test "$SONAR" = "skipped" && test "$SONAR_CANNOT_RUN" = "true"; }

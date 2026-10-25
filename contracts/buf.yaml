@@ -1,0 +1,27 @@
+# buf (BANK-86): revisa los .proto de contracts. Lo corre la CI en cada PR (job buf, parte de ci-ok)
+version: v2
+modules:
+  - path: src/main/proto
+# Compatibilidad con la versión de main: WIRE_JSON protege lo que viaja (números y tipos de campo, en binario y en
+# JSON) y no se queja de un cambio solo de nombre en el código generado. Lo que importa es que un consumidor viejo
+# siga leyendo lo que escribe un productor nuevo (los eventos viven días en Kafka)
+breaking:
+  use:
+    - WIRE_JSON
+lint:
+  use:
+    - STANDARD
+  # Reglas que los .proto de hoy no cumplen (primera corrida, BANK-86). No se renombra nada: cumplirlas cambia el
+  # código generado (y el JSON, en el caso del enum) que ya usan tres servicios. Se arreglan juntas si algún día
+  # hay un paquete v2. Cualquier regla nueva que se rompa sí falla
+  except:
+    # Los dos .proto están en la misma carpeta; cada paquete pediría la suya (bank/customers/v1, bank/transfers/v1)
+    - PACKAGE_DIRECTORY_MATCH
+    - PACKAGE_SAME_DIRECTORY
+    - DIRECTORY_SAME_PACKAGE
+    # CustomerSummary es la respuesta de GetCustomer y de GetMyCustomer, y CustomerContact la de GetContact; el
+    # estándar pide una respuesta propia por RPC (GetCustomerResponse…)
+    - RPC_RESPONSE_STANDARD_NAME
+    - RPC_REQUEST_RESPONSE_UNIQUE
+    # Los valores de CustomerStatus son ACTIVE y BLOCKED; el estándar pide CUSTOMER_STATUS_ACTIVE (cambia el JSON)
+    - ENUM_VALUE_PREFIX
