@@ -1,0 +1,4 @@
+# gitleaks (BANK-85): las reglas por defecto, más las excepciones de abajo. Cada excepción dice por qué. Agregar una
+# es una decisión que se revisa en el PR: si el valor es un secreto real, no se agrega aquí, se ROTA (CONTRIBUTING)
+[extend]
+useDefault = true
