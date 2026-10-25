@@ -76,9 +76,10 @@
       "fullScopeAllowed": false,
       "redirectUris": [
         "http://localhost:8081/swagger-ui/oauth2-redirect.html",
+        "http://localhost:8082/swagger-ui/oauth2-redirect.html",
         "http://localhost:3000/*"
       ],
-      "webOrigins": ["http://localhost:8081", "http://localhost:3000"],
+      "webOrigins": ["http://localhost:8081", "http://localhost:8082", "http://localhost:3000"],
       "attributes": {
         "pkce.code.challenge.method": "S256",
         "post.logout.redirect.uris": "http://localhost:3000/*"

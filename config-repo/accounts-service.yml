@@ -16,6 +16,22 @@ spring:
   threads:
     virtual:
       enabled: true
+  cloud:
+    openfeign:
+      client:
+        config:
+          # Llamadas a customers-service (por su nombre en Eureka): si no conecta en 1 s o no responde
+          # en 2 s, la operación termina en 503 sin escribir nada (BANK-53)
+          customers-service:
+            connect-timeout: 1000
+            read-timeout: 2000
+
+springdoc:
+  swagger-ui:
+    oauth:
+      # Cliente público del navegador (bank-web en Keycloak): login con PKCE, sin secreto
+      client-id: ${SWAGGER_CLIENT_ID:bank-web}
+      use-pkce-with-authorization-code-grant: true
 
 server:
   port: 8082

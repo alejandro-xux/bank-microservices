@@ -3,6 +3,7 @@ package com.alejandro.bank.accounts.config;
 import com.alejandro.bank.accounts.security.ProblemDetailSecurityHandlers;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.http.HttpMethod;
 import org.springframework.security.config.Customizer;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
@@ -15,13 +16,18 @@ import tools.jackson.databind.json.JsonMapper;
 @EnableWebSecurity
 public class SecurityConfig {
 
-    // Rutas sin token: probes de AKS
+    // Roles del claim "roles" del token
+    public static final String ADMIN = "ADMIN";
+
+    // Rutas sin token: probes de AKS y documentación de la API
     private static final String[] PUBLIC_PATHS = {
-            "/actuator/health/**"
+            "/actuator/health/**",
+            "/v3/api-docs/**",
+            "/swagger-ui.html",
+            "/swagger-ui/**"
     };
 
-    // API stateless: cada petición trae su JWT (Bearer), sin sesión ni cookies, por eso CSRF no aplica.
-    // Las reglas por endpoint (asesor/cliente) llegan con cada endpoint (BANK-53 en adelante)
+    // API stateless: cada petición trae su JWT (Bearer), sin sesión ni cookies, por eso CSRF no aplica
     @Bean
     public SecurityFilterChain securityFilterChain(HttpSecurity http, JsonMapper jsonMapper) {
         ProblemDetailSecurityHandlers handlers = new ProblemDetailSecurityHandlers(jsonMapper);
@@ -30,6 +36,8 @@ public class SecurityConfig {
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .authorizeHttpRequests(requests -> requests
                         .requestMatchers(PUBLIC_PATHS).permitAll()
+                        // Abrir cuentas: solo el asesor (BANK-53)
+                        .requestMatchers(HttpMethod.POST, "/accounts").hasRole(ADMIN)
                         .anyRequest().authenticated())
                 // 401 y 403 con cuerpo ProblemDetail: sin token y accesos denegados...
                 .exceptionHandling(exceptions -> exceptions
