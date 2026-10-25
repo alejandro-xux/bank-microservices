@@ -182,7 +182,19 @@ curl -i -X POST http://localhost:8082/accounts -H "Authorization: Bearer $TOKEN"
 | customers-service caído, con error o más lento que 2 s | 503, sin abrir la cuenta |
 
 - La llamada usa OpenFeign: encuentra a customers-service por su nombre en Eureka y reenvía el `Authorization` (token relay). Los timeouts (1 s para conectar, 2 s para responder) están en `config-repo/accounts-service.yml`.
-- Swagger: http://localhost:8082/swagger-ui.html, con el mismo botón **Authorize** que customers-service (ingresar como `asesor`).
+- Swagger: http://localhost:8082/swagger-ui.html, con el mismo botón **Authorize** que customers-service (`asesor` para abrir cuentas, `ana` para ver las suyas).
+
+**Consultar cuentas**: el saldo viaja como texto con 2 decimales (`"1500.50"`), así ningún cliente JSON lo convierte en `double`.
+
+| Endpoint | Quién | Respuesta |
+|---|---|---|
+| `GET /accounts/me` | CUSTOMER | Sus cuentas. Para saber quién es, accounts-service llama a customers-service `GET /customers/me` con el mismo token; sin cliente vinculado → 403 |
+| `GET /accounts/{id}` | ADMIN | Cualquier cuenta, o 404 |
+| `GET /accounts/{id}` | CUSTOMER | Solo las suyas; una ajena y una inexistente responden **el mismo 403** (no revela qué ids existen) |
+| `GET /accounts?customerId=` | ADMIN | Las cuentas de ese cliente (vacía si no tiene) |
+
+- El vínculo entre cuenta de acceso y cliente no se copia en accounts-service: se pregunta cada vez, porque el asesor puede cambiarlo (BANK-48).
+- Si customers-service no responde, las consultas de un cliente devuelven 503 (las del asesor no dependen de él). Cuando vuelve, accounts-service tarda hasta ~1 minuto en encontrarlo: refresca su copia de Eureka cada 30 s y el load balancer tiene su propio caché. Mientras tanto sigue respondiendo 503.
 
 ### Pruebas
 ```bash

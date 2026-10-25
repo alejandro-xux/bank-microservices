@@ -12,4 +12,8 @@ public interface CustomersClient {
 
     @GetMapping("/customers/{id}")
     CustomerSummary findById(@PathVariable("id") String id);
+
+    // El cliente vinculado al token (identityId == oid); 403 si no tiene vínculo
+    @GetMapping("/customers/me")
+    CustomerSummary findMe();
 }

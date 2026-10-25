@@ -18,6 +18,7 @@ public class SecurityConfig {
 
     // Roles del claim "roles" del token
     public static final String ADMIN = "ADMIN";
+    public static final String CUSTOMER = "CUSTOMER";
 
     // Rutas sin token: probes de AKS y documentación de la API
     private static final String[] PUBLIC_PATHS = {
@@ -36,8 +37,13 @@ public class SecurityConfig {
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .authorizeHttpRequests(requests -> requests
                         .requestMatchers(PUBLIC_PATHS).permitAll()
-                        // Abrir cuentas: solo el asesor (BANK-53)
+                        // Abrir cuentas y buscarlas por cliente: solo el asesor (BANK-53, BANK-54)
                         .requestMatchers(HttpMethod.POST, "/accounts").hasRole(ADMIN)
+                        .requestMatchers(HttpMethod.GET, "/accounts").hasRole(ADMIN)
+                        // Mis cuentas: solo un cliente (el asesor no tiene ficha de cliente). Va antes de /accounts/*
+                        .requestMatchers(HttpMethod.GET, "/accounts/me").hasRole(CUSTOMER)
+                        // Una cuenta: asesor o cliente; que sea el dueño lo revisa AccountAccessPolicy
+                        .requestMatchers(HttpMethod.GET, "/accounts/*").hasAnyRole(ADMIN, CUSTOMER)
                         .anyRequest().authenticated())
                 // 401 y 403 con cuerpo ProblemDetail: sin token y accesos denegados...
                 .exceptionHandling(exceptions -> exceptions
