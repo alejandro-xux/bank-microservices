@@ -12,7 +12,7 @@ programación reactiva, Kafka, Azure y Quarkus.
 | customers-service | Spring WebFlux + Cosmos DB + Redis (cache) |
 | accounts-service | Spring MVC + JPA + PostgreSQL |
 | notifications-service | Spring Kafka + Resilience4j |
-| contracts | Contratos gRPC internos (`customers.proto`) y su código generado, compartido por los servicios ([detalle](contracts/README.md)) |
+| contracts | Contratos internos: gRPC (`customers.proto`) y eventos de Kafka (`transfer_events.proto`), con su código generado compartido por los servicios ([detalle](contracts/README.md)) |
 
 ## Entorno local
 **En un comando** (Docker encendido y las credenciales de Cosmos en `~/.bank-microservices.env`, o en la ruta que indique `BANK_ENV_FILE`):

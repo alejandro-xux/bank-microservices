@@ -1,0 +1,38 @@
+// Eventos de transferencias (E7, BANK-68). Los publica accounts-service en el topic bank.transfers.v1
+// (Transactional Outbox, BANK-69) y los consume notifications-service (BANK-70/72); más adelante, fraud-service.
+// Igual que en customers.proto, lo que importa en el binario son los NÚMEROS de campo: antes de cambiar algo,
+// leer las reglas de contracts/README.md. Un cambio incompatible va en un paquete y un topic nuevos (v2).
+syntax = "proto3";
+
+package bank.transfers.v1;
+
+import "google/protobuf/timestamp.proto";
+
+option java_multiple_files = true;
+option java_package = "com.alejandro.bank.contracts.transfers.v1";
+
+// Una transferencia que ya se registró (COMMIT hecho). Sin datos personales (spike BANK-66, D3): ni correo,
+// ni nombre, ni documento. Quien los necesite los pide al dueño del dato (GetContact, BANK-71); así no
+// quedan copiados en el topic durante toda su retención.
+// proto3 no tiene campos obligatorios: un mensaje vacío se lee sin error, así que el consumidor valida
+// event_id y amount (spike BANK-66, K8)
+message TransferCompleted {
+  // Id del evento, único: con él el consumidor descarta los duplicados (entrega "al menos una vez")
+  string event_id = 1;
+  string transfer_id = 2;
+
+  string from_account_id = 3;
+  string from_account_number = 4;
+  string to_account_id = 5;
+  string to_account_number = 6;
+
+  string from_customer_id = 7;
+  string to_customer_id = 8;
+
+  // Monto en texto con 2 decimales ("150.00"), como en la API: un double perdería centavos
+  string amount = 9;
+  // Código ISO 4217: "PEN" o "USD". Texto y no enum: una moneda nueva no rompe a un consumidor viejo
+  string currency = 10;
+
+  google.protobuf.Timestamp completed_at = 11;
+}
