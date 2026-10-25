@@ -38,9 +38,8 @@ dependencies {
 	implementation 'org.springframework.boot:spring-boot-starter-security-oauth2-resource-server'
 	implementation 'org.springframework.cloud:spring-cloud-starter-config'
 	implementation 'org.springframework.cloud:spring-cloud-starter-netflix-eureka-client'
-	// Llamadas a customers-service por su nombre en Eureka, reenviando el token (spike BANK-51)
-	implementation 'org.springframework.cloud:spring-cloud-starter-openfeign'
-	implementation 'org.springframework.cloud:spring-cloud-starter-loadbalancer'
+	// Cliente gRPC de customers-service con el contrato de contracts/ (BANK-62; antes OpenFeign)
+	implementation 'org.springframework.grpc:spring-grpc-client-spring-boot-starter'
 	implementation 'org.springdoc:springdoc-openapi-starter-webmvc-ui'
 	runtimeOnly 'org.postgresql:postgresql'
 	compileOnly 'org.projectlombok:lombok'
@@ -51,6 +50,9 @@ dependencies {
 	testImplementation 'org.springframework.boot:spring-boot-testcontainers'
 	testImplementation 'org.testcontainers:testcontainers-junit-jupiter'
 	testImplementation 'org.testcontainers:testcontainers-postgresql'
+	// customers-service simulado como servidor gRPC en memoria (@AutoConfigureInProcessTransport)
+	testImplementation 'org.springframework.grpc:spring-grpc-test'
+	testImplementation 'org.springframework.grpc:spring-grpc-server-spring-boot-starter'
 	testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
 }
 

@@ -5,6 +5,10 @@ spring:
     import:
       - file:../config-repo/application.yml
       - file:../config-repo/accounts-service.yml
+  # El customers-service simulado corre en memoria; ningún servidor gRPC de prueba abre un puerto fijo
+  grpc:
+    server:
+      port: 0
 
   # Cuenta las sentencias SQL que prepara Hibernate: la prueba del historial demuestra que no hay N+1
   # (solo en pruebas: en producción las estadísticas cuestan rendimiento)

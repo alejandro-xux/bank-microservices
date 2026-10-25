@@ -197,7 +197,7 @@ curl -i -X POST http://localhost:8082/accounts -H "Authorization: Bearer $TOKEN"
 | El cliente no existe o está bloqueado | 422 |
 | customers-service caído, con error o más lento que 2 s | 503, sin abrir la cuenta |
 
-- La llamada usa OpenFeign: encuentra a customers-service por su nombre en Eureka y reenvía el `Authorization` (token relay). Los timeouts (1 s para conectar, 2 s para responder) están en `config-repo/accounts-service.yml`.
+- La llamada a customers-service es por **gRPC** (BANK-62), con el contrato de `contracts/customers.proto`. Va a la dirección `CUSTOMERS_GRPC_ADDRESS` (por defecto `static://localhost:9091`, sin Eureka), reenvía el `Authorization` en la metadata (token relay) y tiene un plazo de 2 s por llamada (`CUSTOMERS_DEADLINE`). `NOT_FOUND` → 422, `PERMISSION_DENIED` en `/me` → 403, todo lo demás (caído, plazo vencido…) → 503.
 - Swagger: http://localhost:8082/swagger-ui.html, con el mismo botón **Authorize** que customers-service (`asesor` para abrir cuentas, `ana` para ver las suyas).
 
 **Consultar cuentas**: el saldo viaja como texto con 2 decimales (`"1500.50"`), así ningún cliente JSON lo convierte en `double`.
@@ -248,7 +248,7 @@ curl -i -X POST http://localhost:8082/transfers -H "Authorization: Bearer $TOKEN
 - Usa el índice `movement(account_id, created_at DESC)`.
 
 - El vínculo entre cuenta de acceso y cliente no se copia en accounts-service: se pregunta cada vez, porque el asesor puede cambiarlo (BANK-48).
-- Si customers-service no responde, las consultas de un cliente devuelven 503 (las del asesor no dependen de él). Cuando vuelve, accounts-service tarda hasta ~1 minuto en encontrarlo: refresca su copia de Eureka cada 30 s y el load balancer tiene su propio caché. Mientras tanto sigue respondiendo 503.
+- Si customers-service no responde, las consultas de un cliente devuelven 503 (las del asesor no dependen de él). Cuando vuelve, accounts-service lo encuentra en un par de segundos: el canal gRPC apunta a una dirección fija y se reconecta solo. Con Feign y Eureka tardaba ~1 minuto, por la copia de Eureka y la caché del load balancer.
 
 ### Pruebas
 ```bash
@@ -259,7 +259,7 @@ cd api-gateway && ./gradlew test
 cd accounts-service && ./gradlew test
 cd contracts && ./gradlew test        # compatibilidad del contrato en el cable
 ```
-No necesitan el config-server ni Eureka encendidos (las de customers-service leen `config-repo/` directamente y no se registran) ni credenciales de Azure (Cosmos está simulado), pero sí Docker encendido: Testcontainers levanta Redis para las pruebas de cache y un Keycloak con `infra/keycloak/bank-realm.json` para probar la seguridad con tokens reales (firma, `iss`, `aud`, roles y `oid`), tanto en customers-service como en el api-gateway (este último frente a un customers-service simulado). En accounts-service levanta un PostgreSQL real: se prueban las migraciones, la validación del esquema y sus restricciones.
+No necesitan el config-server ni Eureka encendidos (las de customers-service leen `config-repo/` directamente y no se registran) ni credenciales de Azure (Cosmos está simulado), pero sí Docker encendido: Testcontainers levanta Redis para las pruebas de cache y un Keycloak con `infra/keycloak/bank-realm.json` para probar la seguridad con tokens reales (firma, `iss`, `aud`, roles y `oid`), tanto en customers-service como en el api-gateway (este último frente a un customers-service simulado). En accounts-service levanta un PostgreSQL real: se prueban las migraciones, la validación del esquema y sus restricciones; el customers-service simulado es un servidor gRPC en memoria con el mismo contrato.
 
 ## Gestión
 - Jira: proyecto `BANK`

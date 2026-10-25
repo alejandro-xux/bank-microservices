@@ -16,15 +16,18 @@ spring:
   threads:
     virtual:
       enabled: true
-  cloud:
-    openfeign:
-      client:
-        config:
-          # Llamadas a customers-service (por su nombre en Eureka): si no conecta en 1 s o no responde
-          # en 2 s, la operación termina en 503 sin escribir nada (BANK-53)
-          customers-service:
-            connect-timeout: 1000
-            read-timeout: 2000
+  # customers-service por gRPC (BANK-62): dirección por configuración, sin Eureka (en AKS será el DNS
+  # del Service, customers-service:9091). Si no responde a tiempo, la operación termina en 503
+  grpc:
+    client:
+      channels:
+        customers:
+          address: ${CUSTOMERS_GRPC_ADDRESS:static://localhost:9091}
+
+# Plazo máximo de cada llamada a customers-service (equivale al read-timeout que tenía Feign)
+bank:
+  customers:
+    deadline: ${CUSTOMERS_DEADLINE:2s}
 
 springdoc:
   swagger-ui:
