@@ -2,12 +2,14 @@ package com.alejandro.bank.accounts.repository;
 
 import com.alejandro.bank.accounts.domain.Transfer;
 import com.alejandro.bank.accounts.domain.TransferStatus;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
 import java.time.Instant;
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -31,4 +33,17 @@ public interface TransferRepository extends JpaRepository<Transfer, UUID> {
             """)
     int resolve(@Param("id") UUID id, @Param("status") TransferStatus status, @Param("reason") String reason,
                 @Param("at") Instant at);
+
+    // Las pendientes más viejas que "before", de la más antigua a la más nueva (BANK-79; índice transfer_pending)
+    @Query("""
+            select t from Transfer t
+            where t.status = com.alejandro.bank.accounts.domain.TransferStatus.PENDING and t.createdAt < :before
+            order by t.createdAt
+            """)
+    List<Transfer> findPendingCreatedBefore(@Param("before") Instant before, Pageable page);
+
+    // Pendiente demasiado tiempo: alguien del banco tiene que revisarla con el core (BANK-79)
+    @Modifying
+    @Query("update Transfer t set t.needsReview = true where t.id = :id and t.needsReview = false")
+    int markForReview(@Param("id") UUID id);
 }

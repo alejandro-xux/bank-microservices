@@ -311,6 +311,21 @@ POST /transfers
 - Las dos cuentas se bloquean (`FOR UPDATE`) siempre en el mismo orden, el id menor primero. Así dos transferencias cruzadas (A→B y B→A) no se bloquean entre sí: con el orden de la petición, PostgreSQL detecta *deadlock detected*.
 - La clave se reclama con un `INSERT` antes de tocar los saldos. Un doble clic simultáneo choca con el `UNIQUE` y responde la transferencia del primero.
 
+**Recuperador de la SAGA** (BANK-79): ninguna transferencia queda `PENDING` para siempre, ni por un timeout del core ni porque accounts-service se cayó a mitad de camino. Cada 5 s toma las pendientes con más de 10 s, le pregunta al core por su id-op y la termina como lo habría hecho el orquestador:
+
+| El core dice | El recuperador |
+|---|---|
+| registrado | T2: crédito · `COMPLETED` · `TransferCompleted` |
+| rechazado | T2: `REVERSAL` · `FAILED` |
+| no existe (nunca llegó) | reenvía el mismo asiento (mismo id-op, el core no lo duplica) y aplica la respuesta |
+| sin respuesta | nada: la próxima vuelta |
+
+- **Nunca compensa a ciegas.** Si sigue pendiente después de 30 min, se marca `needs_review` (migración V5) y queda un log `ERROR` para revisarla con el core. El dinero no se devuelve solo, porque el core pudo haberla registrado.
+- **Un solo recuperador a la vez**: `pg_try_advisory_xact_lock(79)`, como el relay del outbox (que usa el 69). Si dos instancias corrieran juntas, la transición `WHERE status = 'PENDING'` igual impide acreditar dos veces; el candado evita preguntarle lo mismo dos veces al core.
+- Cada T2 se confirma en su propia transacción (`REQUIRES_NEW`). La del recuperador solo sostiene el candado.
+- Configuración: `bank.saga.recovery.*` en `config-repo/accounts-service.yml` (`interval-ms`, `min-age`, `review-after`, `batch-size`, `enabled`). Las pruebas lo apagan y lo llaman a mano.
+- Límite del mock: no guarda estado, así que la consulta de un monto normal dice "registrado" aunque el asiento nunca llegara. El camino "no existe → reenvío" se prueba con `.98`.
+
 **Core bancario** (BANK-77, Anti-Corruption Layer): accounts-service habla con el mainframe emulado (`CORE_BANKING_URL`, por defecto `http://localhost:8089`, plazo `CORE_BANKING_TIMEOUT` de 2 s) sin que su formato entre al dominio. El dominio solo ve `CoreBanking` (asiento y consulta) con números de cuenta y montos propios; `corebanking/mainframe` arma y lee las tramas de largo fijo y traduce cuentas (`001-0000000001-6` ↔ `00100000000016`) y montos (`100.00` ↔ céntimos). Un timeout, un core caído o una respuesta ilegible dan **desconocido**, nunca rechazo: el core pudo haber registrado el asiento.
 
 **Evento de cada transferencia** (BANK-69, Transactional Outbox): la transacción que completa la transferencia (T2 desde BANK-78) guarda `TransferCompleted` (`contracts/transfer_events.proto`) en la tabla `outbox` (migración V3). Si hay ROLLBACK no queda evento; si hay COMMIT, el evento existe sí o sí. Un relay lo publica después en `bank.transfers.v1`, con la cuenta origen como clave.

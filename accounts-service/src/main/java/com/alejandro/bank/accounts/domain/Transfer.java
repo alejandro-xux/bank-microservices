@@ -69,6 +69,10 @@ public class Transfer {
     @Column(name = "core_operation")
     private Long coreOperation;
 
+    // Siguió PENDING más allá del tope: la revisa alguien del banco con el core (BANK-79)
+    @Column(name = "needs_review")
+    private boolean needsReview;
+
     // BANK-56: requestHash es la huella de los datos de la petición (origen, destino y monto)
     public static Transfer create(UUID idempotencyKey, String requestHash, String requestedBy,
                                   UUID fromAccountId, UUID toAccountId, BigDecimal amount, Currency currency,

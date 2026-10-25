@@ -30,6 +30,10 @@ public interface AccountRepository extends JpaRepository<Account, UUID> {
     @Query("select a.currency from Account a where a.id = :id")
     Optional<Currency> findCurrencyById(@Param("id") UUID id);
 
+    // El número de cuenta, para rearmar el asiento de una transferencia pendiente (BANK-79)
+    @Query("select a.number from Account a where a.id = :id")
+    Optional<String> findNumberById(@Param("id") UUID id);
+
     @Query("select a.id from Account a where a.number = :number")
     Optional<UUID> findIdByNumber(@Param("number") String number);
 

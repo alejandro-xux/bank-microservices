@@ -49,6 +49,14 @@ bank:
   core-banking:
     url: ${CORE_BANKING_URL:http://localhost:8089}
     timeout: ${CORE_BANKING_TIMEOUT:2s}
+  # Recuperador de la SAGA (BANK-79): cada 5 s revisa las transferencias PENDING con más de 10 s; si alguna sigue
+  # pendiente después de 30 min, la marca para revisión (no la compensa a ciegas)
+  saga:
+    recovery:
+      interval-ms: 5000
+      min-age: 10s
+      review-after: 30m
+      batch-size: 50
   # Relay del outbox (BANK-69): cada 500 ms, lotes de 100
   outbox:
     poll-interval-ms: 500
