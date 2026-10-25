@@ -420,9 +420,11 @@ Cuando las pruebas pasan, el job `sonar` analiza **el repo entero en un solo pro
 | Condición sobre el código nuevo | Umbral |
 |---|---|
 | Cobertura | ≥ 80 % |
-| Bugs y vulnerabilidades nuevas | 0 (calificación A) |
-| Security hotspots revisados | 100 % |
 | Líneas duplicadas | ≤ 3 % |
+| Confiabilidad (bugs) | calificación A |
+| Seguridad (vulnerabilidades) | calificación A |
+| Mantenibilidad (deuda técnica de los code smells) | calificación A |
+| Security hotspots revisados | 100 % |
 
 - En el PR, SonarCloud deja un comentario con el resultado y el enlace a cada hallazgo.
 - La cobertura de un módulo en local: `./gradlew test` deja el reporte en `build/reports/jacoco/test/html/index.html` (JaCoCo está en `gradle/quality.gradle`, que aplican todos los módulos).
