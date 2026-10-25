@@ -414,6 +414,23 @@ Cada PR a `main` corre `.github/workflows/ci.yml`: las pruebas de los 7 módulos
 - **Pasa en tu Mac y falla en la CI:** la CI corre en Linux, y hay diferencias reales. La primera que encontró: allí `Instant.now()` tiene nanosegundos y PostgreSQL guarda microsegundos, así que toda fecha que se guarda pasa por `Timestamps.now()`.
 - Un push nuevo al mismo PR cancela la corrida anterior. En `main` cada merge se prueba completo.
 
+### Calidad (SonarCloud, BANK-84)
+Cuando las pruebas pasan, el job `sonar` analiza **el repo entero en un solo proyecto** ([alejandro-xux_bank-microservices](https://sonarcloud.io/project/overview?id=alejandro-xux_bank-microservices)). Usa las clases compiladas y la cobertura de JaCoCo que dejó cada módulo. `ci-ok` exige que pase el **Quality Gate "Sonar way"**, que mira solo el **código nuevo** del PR:
+
+| Condición sobre el código nuevo | Umbral |
+|---|---|
+| Cobertura | ≥ 80 % |
+| Líneas duplicadas | ≤ 3 % |
+| Confiabilidad (bugs) | calificación A |
+| Seguridad (vulnerabilidades) | calificación A |
+| Mantenibilidad (deuda técnica de los code smells) | calificación A |
+| Security hotspots revisados | 100 % |
+
+- En el PR, SonarCloud deja un comentario con el resultado y el enlace a cada hallazgo.
+- La cobertura de un módulo en local: `./gradlew test` deja el reporte en `build/reports/jacoco/test/html/index.html` (JaCoCo está en `gradle/quality.gradle`, que aplican todos los módulos).
+- El plan gratis no permite un gate propio. Con pocas líneas nuevas (menos de 20), SonarCloud no aplica las condiciones de cobertura ni de duplicación.
+- No corre en PRs de forks ni de Dependabot, porque GitHub no les pasa el secret `SONAR_TOKEN`. Ahí `ci-ok` acepta que Sonar quede sin correr.
+
 ## Gestión
 - Jira: proyecto `BANK`
 - Ramas: `feature/BANK-<n>-<descripcion>`
