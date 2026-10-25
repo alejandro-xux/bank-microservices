@@ -14,6 +14,7 @@ import com.alejandro.bank.accounts.repository.MovementRepository;
 import com.alejandro.bank.accounts.repository.TransferRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
+import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
@@ -71,7 +72,9 @@ public class TransferExecutor {
 
     // T2 cuando el core registró el asiento: COMPLETED, crédito en el destino y el evento. false si la transferencia
     // ya estaba resuelta (otro proceso ganó la transición): entonces no se mueve nada
-    @Transactional
+    // REQUIRES_NEW: el recuperador (BANK-79) la llama dentro de su transacción de coordinación, y cada T2 tiene que
+    // confirmarse sola, en el momento
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
     public boolean complete(UUID transferId) {
         Instant now = Instant.now();
         if (transferRepository.resolve(transferId, TransferStatus.COMPLETED, null, now) == 0) {
@@ -90,7 +93,7 @@ public class TransferExecutor {
 
     // T2 cuando el core la rechazó: FAILED y el dinero vuelve al origen con un movimiento REVERSAL (S3). false si ya
     // estaba resuelta
-    @Transactional
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
     public boolean fail(UUID transferId, String reason) {
         if (transferRepository.resolve(transferId, TransferStatus.FAILED, reason, Instant.now()) == 0) {
             return false;

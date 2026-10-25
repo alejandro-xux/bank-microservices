@@ -27,6 +27,10 @@ bank:
   outbox:
     relay:
       enabled: false
+  # Tampoco el recuperador de la SAGA (BANK-79): las pruebas llaman a TransferRecovery a mano
+  saga:
+    recovery:
+      enabled: false
 
 # Las pruebas no se registran en Eureka (no necesitan el discovery-server)
 eureka:
