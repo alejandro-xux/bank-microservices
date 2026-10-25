@@ -41,6 +41,22 @@ public class AccountAccessPolicy {
                 .orElseThrow(() -> new AccessDeniedException("Sin acceso a la cuenta"));
     }
 
+    // Transferir desde una cuenta (BANK-56): el asesor desde cualquiera; un CUSTOMER solo desde las
+    // suyas, y una ajena o inexistente da el mismo 403. Es una proyección: no deja la cuenta cargada
+    // antes de que la transferencia la bloquee
+    public void checkCanDebit(UUID accountId, Authentication authentication) {
+        if (hasRole(authentication, SecurityConfig.ADMIN)) {
+            return;
+        }
+        String customerId = ownCustomerId();
+        boolean own = accountRepository.findCustomerIdById(accountId)
+                .filter(customerId::equals)
+                .isPresent();
+        if (!own) {
+            throw new AccessDeniedException("Sin acceso a la cuenta");
+        }
+    }
+
     private static boolean hasRole(Authentication authentication, String role) {
         return authentication.getAuthorities().stream()
                 .anyMatch(authority -> (ROLE_PREFIX + role).equals(authority.getAuthority()));

@@ -1,6 +1,7 @@
 package com.alejandro.bank.accounts.repository;
 
 import com.alejandro.bank.accounts.domain.Account;
+import com.alejandro.bank.accounts.domain.Currency;
 import jakarta.persistence.LockModeType;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Lock;
@@ -19,6 +20,18 @@ public interface AccountRepository extends JpaRepository<Account, UUID> {
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("select a from Account a where a.id = :id")
     Optional<Account> lockById(@Param("id") UUID id);
+
+    // Proyecciones (devuelven un valor, no la entidad): sirven para decidir ANTES de bloquear sin dejar
+    // la cuenta en el contexto de persistencia. Si la entidad ya estuviera cargada, lockById devolvería
+    // esa copia con el saldo leído antes del candado
+    @Query("select a.customerId from Account a where a.id = :id")
+    Optional<String> findCustomerIdById(@Param("id") UUID id);
+
+    @Query("select a.currency from Account a where a.id = :id")
+    Optional<Currency> findCurrencyById(@Param("id") UUID id);
+
+    @Query("select a.id from Account a where a.number = :number")
+    Optional<UUID> findIdByNumber(@Param("number") String number);
 
     // Las cuentas de un cliente, de la más antigua a la más nueva (usa idx_account_customer)
     List<Account> findByCustomerIdOrderByCreatedAtAsc(String customerId);

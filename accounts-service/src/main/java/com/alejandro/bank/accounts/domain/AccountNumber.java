@@ -19,6 +19,15 @@ public final class AccountNumber {
         return BRANCH + "-" + serial + "-" + luhnCheckDigit(BRANCH + serial);
     }
 
+    // Formato 001-NNNNNNNNNN-D con el dígito verificador correcto (detecta un número mal tipeado)
+    public static boolean isValid(String number) {
+        if (number == null || !number.matches("\\d{3}-\\d{10}-\\d")) {
+            return false;
+        }
+        String digits = number.replace("-", "");
+        return luhnCheckDigit(digits.substring(0, 13)) == digits.charAt(13) - '0';
+    }
+
     // Recorre de derecha a izquierda duplicando uno sí y uno no (empezando por el último);
     // el dígito verificador es el que hace que la suma total termine en 0
     static int luhnCheckDigit(String digits) {
