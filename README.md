@@ -12,6 +12,7 @@ programación reactiva, Kafka, Azure y Quarkus.
 | customers-service | Spring WebFlux + Cosmos DB + Redis (cache) |
 | accounts-service | Spring MVC + JPA + PostgreSQL |
 | notifications-service | Spring Kafka + Resilience4j |
+| contracts | Contratos gRPC internos (`customers.proto`) y su código generado, compartido por los servicios ([detalle](contracts/README.md)) |
 
 ## Entorno local
 **En un comando** (Docker encendido y las credenciales de Cosmos en `~/.bank-microservices.env`, o en la ruta que indique `BANK_ENV_FILE`):
@@ -244,6 +245,7 @@ cd config-server && ./gradlew test
 cd discovery-server && ./gradlew test
 cd api-gateway && ./gradlew test
 cd accounts-service && ./gradlew test
+cd contracts && ./gradlew test        # compatibilidad del contrato en el cable
 ```
 No necesitan el config-server ni Eureka encendidos (las de customers-service leen `config-repo/` directamente y no se registran) ni credenciales de Azure (Cosmos está simulado), pero sí Docker encendido: Testcontainers levanta Redis para las pruebas de cache y un Keycloak con `infra/keycloak/bank-realm.json` para probar la seguridad con tokens reales (firma, `iss`, `aud`, roles y `oid`), tanto en customers-service como en el api-gateway (este último frente a un customers-service simulado). En accounts-service levanta un PostgreSQL real: se prueban las migraciones, la validación del esquema y sus restricciones.
 

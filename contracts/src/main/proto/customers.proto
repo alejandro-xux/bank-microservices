@@ -1,0 +1,42 @@
+// Contrato interno accounts-service → customers-service (E6, BANK-60).
+// Lo que importa en el binario son los NÚMEROS de campo, no los nombres: antes de cambiar algo,
+// leer las reglas de contracts/README.md. Un cambio incompatible va en un paquete nuevo (v2).
+syntax = "proto3";
+
+package bank.customers.v1;
+
+option java_multiple_files = true;
+option java_package = "com.alejandro.bank.contracts.customers.v1";
+
+// Lo que accounts-service necesita saber de un cliente. Lo implementa customers-service (BANK-61)
+// y lo llama accounts-service (BANK-62); el JWT del usuario viaja en la metadata "authorization"
+service CustomersService {
+
+  // Un cliente por su id (solo el asesor): NOT_FOUND si no existe
+  rpc GetCustomer (GetCustomerRequest) returns (CustomerSummary);
+
+  // El cliente vinculado al token (solo un CUSTOMER): PERMISSION_DENIED si no tiene vínculo
+  rpc GetMyCustomer (GetMyCustomerRequest) returns (CustomerSummary);
+}
+
+message GetCustomerRequest {
+  string id = 1;
+}
+
+// Vacío: quién es el cliente sale del token, no de la petición
+message GetMyCustomerRequest {
+}
+
+// Solo lo que usa accounts-service (tolerant reader): menos campos, menos cosas que puedan romperlo
+message CustomerSummary {
+  string id = 1;
+  CustomerStatus status = 2;
+}
+
+// En proto3 el 0 es el valor por defecto de un campo no enviado: nunca significa un estado real.
+// Un valor que un servicio viejo no conoce le llega como UNRECOGNIZED, sin romper la lectura
+enum CustomerStatus {
+  CUSTOMER_STATUS_UNSPECIFIED = 0;
+  ACTIVE = 1;
+  BLOCKED = 2;
+}

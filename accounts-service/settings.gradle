@@ -1,2 +1,4 @@
 rootProject.name = 'accounts-service'
 includeBuild('../platform-bom')
+// Contrato gRPC interno accounts → customers (BANK-60)
+includeBuild('../contracts')
