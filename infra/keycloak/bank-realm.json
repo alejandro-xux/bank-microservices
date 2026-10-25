@@ -53,11 +53,11 @@
           }
         },
         {
-          "name": "audience customers-service",
+          "name": "audience bank-api",
           "protocol": "openid-connect",
           "protocolMapper": "oidc-audience-mapper",
           "config": {
-            "included.custom.audience": "customers-service",
+            "included.custom.audience": "bank-api",
             "access.token.claim": "true",
             "id.token.claim": "false",
             "introspection.token.claim": "true"
@@ -113,11 +113,11 @@
           }
         },
         {
-          "name": "audience customers-service",
+          "name": "audience bank-api",
           "protocol": "openid-connect",
           "protocolMapper": "oidc-audience-mapper",
           "config": {
-            "included.custom.audience": "customers-service",
+            "included.custom.audience": "bank-api",
             "access.token.claim": "true",
             "id.token.claim": "false",
             "introspection.token.claim": "true"

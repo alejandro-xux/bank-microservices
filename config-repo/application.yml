@@ -5,10 +5,12 @@ spring:
     oauth2:
       resourceserver:
         jwt:
-          # Emisor de confianza (iss) y nombre de este sistema (aud). Por defecto, el Keycloak local;
+          # Emisor de confianza (iss) y audiencia (aud). Por defecto, el Keycloak local;
           # en Azure se definen con las variables apuntando a Microsoft Entra, sin cambiar código.
           issuer-uri: ${AUTH_ISSUER_URI:http://localhost:8180/realms/bank}
-          audiences: ${AUTH_AUDIENCE:customers-service}
+          # bank-api = toda la API detrás del gateway (un token sirve para todos los servicios);
+          # el gateway y cada servicio la validan (zero trust). En Entra: el registro de app de la API (BANK-50)
+          audiences: ${AUTH_AUDIENCE:bank-api}
           # Roles del claim "roles" (CUSTOMER → ROLE_CUSTOMER), igual en Keycloak y en Entra (app roles)
           authorities-claim-name: roles
           authority-prefix: ROLE_

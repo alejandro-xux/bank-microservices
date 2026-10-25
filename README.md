@@ -23,7 +23,7 @@ docker compose -f infra/docker-compose.yml down    # los apaga
 ```
 
 ### Keycloak (identidad, solo local)
-En Azure la identidad la da Microsoft Entra; Keycloak lo reemplaza en local y emite tokens con la misma forma (claims `roles`, `oid` y `aud`).
+En Azure la identidad la da Microsoft Entra; Keycloak lo reemplaza en local y emite tokens con la misma forma (claims `roles`, `oid` y `aud`). La audiencia es `bank-api`: un mismo token sirve para toda la API detrás del gateway.
 
 - Consola: http://localhost:8180/admin (usuario `admin` / `admin`), realm `bank`.
 - El realm se importa al arrancar desde `infra/keycloak/bank-realm.json`. Los cambios hechos en la consola se pierden al recrear el contenedor; lo que deba quedar se edita en el JSON y se aplica con `docker compose -f infra/docker-compose.yml up -d --force-recreate keycloak`.
@@ -94,7 +94,7 @@ cd discovery-server
 - En AKS (E12) Eureka se reemplaza por Services y DNS de Kubernetes.
 
 ### customers-service
-Necesita el config-server arriba y las variables `COSMOS_ENDPOINT` y `COSMOS_KEY`. Son opcionales `CONFIG_SERVER_URL` (por defecto `http://localhost:8888`), `EUREKA_URL` (por defecto `http://localhost:8761/eureka`), `REDIS_HOST` y `REDIS_PORT` (por defecto `localhost:6380`) y `AUTH_ISSUER_URI` y `AUTH_AUDIENCE` (por defecto el Keycloak local: `http://localhost:8180/realms/bank` y `customers-service`; en Azure apuntan a Microsoft Entra).
+Necesita el config-server arriba y las variables `COSMOS_ENDPOINT` y `COSMOS_KEY`. Son opcionales `CONFIG_SERVER_URL` (por defecto `http://localhost:8888`), `EUREKA_URL` (por defecto `http://localhost:8761/eureka`), `REDIS_HOST` y `REDIS_PORT` (por defecto `localhost:6380`) y `AUTH_ISSUER_URI` y `AUTH_AUDIENCE` (por defecto el Keycloak local: `http://localhost:8180/realms/bank` y `bank-api`; en Azure apuntan a Microsoft Entra).
 
 ```bash
 cd customers-service
