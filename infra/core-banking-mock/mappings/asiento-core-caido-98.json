@@ -1,6 +1,8 @@
 {
-  "name": "Core caído: céntimos .98 → 500 y el asiento NO queda registrado",
-  "priority": 1,
+  "metadata": {
+    "comentario": "Céntimos .98: el core está caído (HTTP 500) y NO registra nada; la consulta dirá 025 NF"
+  },
+  "priority": 2,
   "request": {
     "method": "POST",
     "url": "/core/asientos",
@@ -12,9 +14,6 @@
   },
   "response": {
     "status": 500,
-    "headers": {
-      "Content-Type": "text/plain"
-    },
     "body": "091 CORE NO DISPONIBLE"
   }
 }

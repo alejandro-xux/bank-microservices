@@ -1,0 +1,20 @@
+{
+  "metadata": {
+    "comentario": "Solo para pruebas: olvida todos los asientos registrados (POST /__estado/borrar)"
+  },
+  "request": {
+    "method": "POST",
+    "url": "/__estado/borrar"
+  },
+  "response": {
+    "status": 204
+  },
+  "serveEventListeners": [
+    {
+      "name": "deleteState",
+      "parameters": {
+        "contextsMatching": ".*"
+      }
+    }
+  ]
+}

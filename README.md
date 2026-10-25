@@ -68,7 +68,7 @@ docker exec bank-kafka /opt/kafka/bin/kafka-console-consumer.sh --bootstrap-serv
 ```
 
 ### core-banking-mock (mainframe emulado, BANK-76)
-WireMock en el puerto **8089** que se comporta como un core bancario legado: recibe asientos contables en **tramas de largo fijo** (`POST /core/asientos`, 75 caracteres) y consultas (`POST /core/consultas`, 47) y responde igual (52). Sin estado: responde según reglas por los céntimos del monto (`.13` rechazo, `.99` tarda 5 s pero registra, `.98` core caído). Formato, reglas y límites en [infra/core-banking-mock/README.md](infra/core-banking-mock/README.md).
+WireMock en el puerto **8089** que se comporta como un core bancario legado: recibe asientos contables en **tramas de largo fijo** (`POST /core/asientos`, 75 caracteres) y consultas (`POST /core/consultas`, 47) y responde igual (52). Recuerda cada asiento por id-op (BANK-90): la consulta dice qué pasó con **ese** asiento y `025 NF` si nunca llegó. El asiento decide por los céntimos del monto (`.13` rechazo, `.99` tarda 5 s pero registra, `.98` core caído). Formato, reglas y límites en [infra/core-banking-mock/README.md](infra/core-banking-mock/README.md).
 
 ### Mailpit (correos de prueba)
 Recibe por SMTP en `localhost:1025` y muestra cada correo en http://localhost:8025. Guarda en memoria: se vacía al reiniciar. En Azure lo reemplaza un proveedor de correo real (por ejemplo, Azure Communication Services Email).
@@ -324,7 +324,7 @@ POST /transfers
 - **Un solo recuperador a la vez**: `pg_try_advisory_xact_lock(79)`, como el relay del outbox (que usa el 69). Si dos instancias corrieran juntas, la transición `WHERE status = 'PENDING'` igual impide acreditar dos veces; el candado evita preguntarle lo mismo dos veces al core.
 - Cada T2 se confirma en su propia transacción (`REQUIRES_NEW`). La del recuperador solo sostiene el candado.
 - Configuración: `bank.saga.recovery.*` en `config-repo/accounts-service.yml` (`interval-ms`, `min-age`, `review-after`, `batch-size`, `enabled`). Las pruebas lo apagan y lo llaman a mano.
-- Límite del mock: no guarda estado, así que la consulta de un monto normal dice "registrado" aunque el asiento nunca llegara. El camino "no existe → reenvío" se prueba con `.98`.
+- Desde BANK-90 el mock recuerda los asientos. Una caída antes del asiento se prueba con un monto normal: la consulta dice "no existe", el recuperador reenvía y la transferencia termina COMPLETED.
 
 **Core bancario** (BANK-77, Anti-Corruption Layer): accounts-service habla con el mainframe emulado (`CORE_BANKING_URL`, por defecto `http://localhost:8089`, plazo `CORE_BANKING_TIMEOUT` de 2 s) sin que su formato entre al dominio. El dominio solo ve `CoreBanking` (asiento y consulta) con números de cuenta y montos propios; `corebanking/mainframe` arma y lee las tramas de largo fijo y traduce cuentas (`001-0000000001-6` ↔ `00100000000016`) y montos (`100.00` ↔ céntimos). Un timeout, un core caído o una respuesta ilegible dan **desconocido**, nunca rechazo: el core pudo haber registrado el asiento.
 

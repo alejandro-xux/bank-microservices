@@ -1,20 +1,19 @@
 {
-  "name": "Consulta: céntimos .98 → 025 NF (el core nunca lo registró)",
-  "priority": 1,
+  "metadata": {
+    "comentario": "Consulta de un id-op que el core nunca recibió (BANK-90; antes solo con .98): 025 NF"
+  },
+  "priority": 5,
   "request": {
     "method": "POST",
     "url": "/core/consultas",
     "bodyPatterns": [
       {
-        "matches": "^QRY.{29}\\d{13}98$"
+        "matches": "^QRY.{44}$"
       }
     ]
   },
   "response": {
     "status": 200,
-    "headers": {
-      "Content-Type": "text/plain"
-    },
     "body": "{{regexExtract request.body '^(?:TRX|QRY)(.{14})(.{12})(?:.{28})?(.{3})(.{15})$' 'p'}}025QRY{{p.0}}{{p.1}}{{p.2}}{{p.3}}NF",
     "transformers": [
       "response-template"

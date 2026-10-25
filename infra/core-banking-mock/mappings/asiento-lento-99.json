@@ -1,6 +1,8 @@
 {
-  "name": "Asiento lento: céntimos .99 → responde a los 5 s, pero queda registrado",
-  "priority": 1,
+  "metadata": {
+    "comentario": "Céntimos .99: el core registra enseguida pero responde a los 5 s (accounts-service corta a los 2 s: desconocido)"
+  },
+  "priority": 2,
   "request": {
     "method": "POST",
     "url": "/core/asientos",
@@ -12,13 +14,25 @@
   },
   "response": {
     "status": 200,
-    "headers": {
-      "Content-Type": "text/plain"
-    },
     "body": "{{regexExtract request.body '^(?:TRX|QRY)(.{14})(.{12})(?:.{28})?(.{3})(.{15})$' 'p'}}000TRX{{p.0}}{{p.1}}{{p.2}}{{p.3}}OK",
     "transformers": [
       "response-template"
     ],
     "fixedDelayMilliseconds": 5000
-  }
+  },
+  "serveEventListeners": [
+    {
+      "name": "recordState",
+      "parameters": {
+        "context": "{{regexExtract request.body '^(?:TRX|QRY).{14}(.{12})' 'k'}}{{k.0}}",
+        "state": {
+          "result": "000",
+          "estado": "OK"
+        }
+      },
+      "requestPhases": [
+        "BEFORE_RESPONSE_SENT"
+      ]
+    }
+  ]
 }

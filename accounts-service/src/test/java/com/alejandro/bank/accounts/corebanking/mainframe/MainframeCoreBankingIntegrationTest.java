@@ -7,20 +7,24 @@ import com.alejandro.bank.accounts.domain.Currency;
 import org.junit.jupiter.api.Test;
 import org.testcontainers.containers.GenericContainer;
 import org.testcontainers.containers.wait.strategy.Wait;
+import org.testcontainers.images.builder.ImageFromDockerfile;
 import org.testcontainers.utility.MountableFile;
 
 import java.math.BigDecimal;
+import java.nio.file.Path;
 import java.time.Duration;
 import java.time.Instant;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-// El cliente del core contra el mainframe emulado de verdad: el mismo WireMock y los mismos mappings que el compose
-// (infra/core-banking-mock, BANK-76). Si un mapping o el codec cambian sin acuerdo, esta prueba lo nota
+// El cliente del core contra el mainframe emulado de verdad: la misma imagen (WireMock con estado, BANK-90) y los
+// mismos mappings que el compose (infra/core-banking-mock, BANK-76). Si un mapping o el codec cambian sin acuerdo,
+// esta prueba lo nota
 class MainframeCoreBankingIntegrationTest {
 
-    static final GenericContainer<?> CORE = new GenericContainer<>("wiremock/wiremock:3.13.2")
-            .withCommand("--global-response-templating", "--disable-banner")
+    static final GenericContainer<?> CORE = new GenericContainer<>(
+            new ImageFromDockerfile("bank-core-banking-mock-test", false)
+                    .withFileFromPath("Dockerfile", Path.of("../infra/core-banking-mock/Dockerfile")))
             .withCopyFileToContainer(MountableFile.forHostPath("../infra/core-banking-mock/mappings"), "/home/wiremock/mappings")
             .withExposedPorts(8080)
             .waitingFor(Wait.forHttp("/__admin/health"));
@@ -60,9 +64,26 @@ class MainframeCoreBankingIntegrationTest {
 
     @Test
     void theQueryTellsWhatHappened() {
-        assertThat(core.query(entry(4, "100.99")).outcome()).isEqualTo(PostingResult.Outcome.POSTED);
-        assertThat(core.query(entry(3, "100.98")).outcome()).isEqualTo(PostingResult.Outcome.NOT_FOUND);
-        assertThat(core.query(entry(2, "100.13")).outcome()).isEqualTo(PostingResult.Outcome.REJECTED);
+        // El core recuerda por id-op (BANK-90): la consulta responde lo que pasó con ESE asiento, no por el monto
+        assertThat(core.query(entry(41, "100.00")).outcome()).isEqualTo(PostingResult.Outcome.NOT_FOUND);
+        core.post(entry(41, "100.00"));
+        assertThat(core.query(entry(41, "100.00")).outcome()).isEqualTo(PostingResult.Outcome.POSTED);
+
+        core.post(entry(42, "100.13"));
+        assertThat(core.query(entry(42, "100.13")).outcome()).isEqualTo(PostingResult.Outcome.REJECTED);
+
+        core.post(entry(43, "100.98"));
+        assertThat(core.query(entry(43, "100.98")).outcome()).isEqualTo(PostingResult.Outcome.NOT_FOUND);
+    }
+
+    @Test
+    void theSamePostingTwiceIsRegisteredOnceAndAnsweredTheSame() {
+        assertThat(core.post(entry(44, "100.13")).outcome()).isEqualTo(PostingResult.Outcome.REJECTED);
+        assertThat(core.post(entry(44, "100.13")).outcome()).isEqualTo(PostingResult.Outcome.REJECTED);
+        // .99 tarda 5 s la primera vez (el plazo es 2 s: desconocido), pero el core ya lo registró: el reenvío
+        // responde enseguida lo mismo
+        assertThat(core.post(entry(45, "100.99")).outcome()).isEqualTo(PostingResult.Outcome.UNKNOWN);
+        assertThat(core.post(entry(45, "100.99")).outcome()).isEqualTo(PostingResult.Outcome.POSTED);
     }
 
     @Test

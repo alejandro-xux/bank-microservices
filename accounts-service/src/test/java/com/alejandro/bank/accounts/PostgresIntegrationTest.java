@@ -37,8 +37,14 @@ import org.testcontainers.containers.GenericContainer;
 import org.testcontainers.containers.wait.strategy.Wait;
 import org.testcontainers.kafka.KafkaContainer;
 import org.testcontainers.utility.MountableFile;
+import org.testcontainers.images.builder.ImageFromDockerfile;
 import org.testcontainers.postgresql.PostgreSQLContainer;
 
+import java.net.URI;
+import java.net.http.HttpClient;
+import java.net.http.HttpRequest;
+import java.net.http.HttpResponse;
+import java.nio.file.Path;
 import java.time.Instant;
 import java.util.List;
 import java.util.Map;
@@ -85,10 +91,12 @@ public abstract class PostgresIntegrationTest {
     protected static final KafkaContainer KAFKA = new KafkaContainer("apache/kafka:4.3.1")
             .withEnv("KAFKA_AUTO_CREATE_TOPICS_ENABLE", "false");
 
-    // El core bancario (BANK-78): el mismo WireMock y los mismos mappings que el compose, con sus reglas por céntimos
-    // (.13 rechazo, .99 lento pero registrado, .98 core caído)
-    protected static final GenericContainer<?> CORE_BANKING = new GenericContainer<>("wiremock/wiremock:3.13.2")
-            .withCommand("--global-response-templating", "--disable-banner")
+    // El core bancario (BANK-78): la misma imagen (WireMock con estado, BANK-90) y los mismos mappings que el compose,
+    // con sus reglas por céntimos (.13 rechazo, .99 lento pero registrado, .98 core caído). Testcontainers construye la
+    // imagen del mismo Dockerfile y la guarda con ese nombre: la siguiente corrida no la vuelve a construir
+    protected static final GenericContainer<?> CORE_BANKING = new GenericContainer<>(
+            new ImageFromDockerfile("bank-core-banking-mock-test", false)
+                    .withFileFromPath("Dockerfile", Path.of("../infra/core-banking-mock/Dockerfile")))
             .withCopyFileToContainer(MountableFile.forHostPath("../infra/core-banking-mock/mappings"), "/home/wiremock/mappings")
             .withExposedPorts(8080)
             .waitingFor(Wait.forHttp("/__admin/health"));
@@ -121,6 +129,18 @@ public abstract class PostgresIntegrationTest {
     void tokens() {
         RECEIVED_AUTHORIZATION.set(null);
         stubTokens(jwtDecoder);
+    }
+
+    // El core recuerda los asientos (BANK-90): cada prueba empieza con un core que no recibió nada
+    @BeforeEach
+    void coreBankingForgets() throws Exception {
+        forgetCoreBanking();
+    }
+
+    protected static void forgetCoreBanking() throws Exception {
+        HttpClient.newHttpClient().send(HttpRequest.newBuilder(
+                        URI.create("http://" + CORE_BANKING.getHost() + ":" + CORE_BANKING.getMappedPort(8080) + "/__estado/borrar"))
+                .POST(HttpRequest.BodyPublishers.noBody()).build(), HttpResponse.BodyHandlers.discarding());
     }
 
     // Los tokens simulados que entiende el JwtDecoder. Aparte del @BeforeEach para que los escenarios de Cucumber
