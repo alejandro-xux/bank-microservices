@@ -292,6 +292,8 @@ curl -i -X POST http://localhost:8082/transfers -H "Authorization: Bearer $TOKEN
 - Las dos cuentas se bloquean (`FOR UPDATE`) siempre en el mismo orden, el id menor primero. Así dos transferencias cruzadas (A→B y B→A) no se bloquean entre sí: con el orden de la petición, PostgreSQL detecta *deadlock detected*.
 - La clave se reclama con un `INSERT` antes de tocar los saldos. Un doble clic simultáneo choca con el `UNIQUE` y responde la transferencia del primero.
 
+**Core bancario** (BANK-77, Anti-Corruption Layer): accounts-service habla con el mainframe emulado (`CORE_BANKING_URL`, por defecto `http://localhost:8089`, plazo `CORE_BANKING_TIMEOUT` de 2 s) sin que su formato entre al dominio. El dominio solo ve `CoreBanking` (asiento y consulta) con números de cuenta y montos propios; `corebanking/mainframe` arma y lee las tramas de largo fijo y traduce cuentas (`001-0000000001-6` ↔ `00100000000016`) y montos (`100.00` ↔ céntimos). Un timeout, un core caído o una respuesta ilegible dan **desconocido**, nunca rechazo: el core pudo haber registrado el asiento.
+
 **Evento de cada transferencia** (BANK-69, Transactional Outbox): la misma transacción guarda `TransferCompleted` (`contracts/transfer_events.proto`) en la tabla `outbox` (migración V3). Si hay ROLLBACK no queda evento; si hay COMMIT, el evento existe sí o sí. Un relay lo publica después en `bank.transfers.v1`, con la cuenta origen como clave.
 
 ```
