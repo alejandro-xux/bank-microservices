@@ -1,34 +1,52 @@
 package com.alejandro.bank.accounts;
 
-import com.sun.net.httpserver.HttpExchange;
-import com.sun.net.httpserver.HttpServer;
+import com.alejandro.bank.contracts.customers.v1.CustomerStatus;
+import com.alejandro.bank.contracts.customers.v1.CustomerSummary;
+import com.alejandro.bank.contracts.customers.v1.CustomersServiceGrpc;
+import com.alejandro.bank.contracts.customers.v1.GetCustomerRequest;
+import com.alejandro.bank.contracts.customers.v1.GetMyCustomerRequest;
+import io.grpc.Context;
+import io.grpc.Contexts;
+import io.grpc.Metadata;
+import io.grpc.ServerCall;
+import io.grpc.ServerCallHandler;
+import io.grpc.ServerInterceptor;
+import io.grpc.Status;
+import io.grpc.stub.StreamObserver;
 import org.junit.jupiter.api.BeforeEach;
+import org.springframework.boot.grpc.test.autoconfigure.AutoConfigureInProcessTransport;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.boot.test.context.TestConfiguration;
 import org.springframework.boot.testcontainers.service.connection.ServiceConnection;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Import;
+import org.springframework.grpc.server.GlobalServerInterceptor;
+import org.springframework.grpc.server.security.AuthenticationProcessInterceptor;
+import org.springframework.grpc.server.security.GrpcSecurity;
 import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.security.oauth2.jwt.JwtDecoder;
-import org.springframework.test.context.DynamicPropertyRegistry;
-import org.springframework.test.context.DynamicPropertySource;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.testcontainers.postgresql.PostgreSQLContainer;
 
-import java.io.IOException;
-import java.io.UncheckedIOException;
-import java.net.InetSocketAddress;
-import java.nio.charset.StandardCharsets;
 import java.time.Instant;
 import java.util.List;
+import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
 
 import static org.mockito.Mockito.when;
 
 // Base de las pruebas de integración: un PostgreSQL real (misma versión que infra/docker-compose.yml)
-// y un customers-service simulado, compartidos por todas las clases que heredan de aquí porque usan
-// el mismo contexto de Spring. El JwtDecoder es simulado: estas pruebas no necesitan Keycloak
-// (la validación real del token contra Keycloak ya se prueba en customers-service, BANK-39)
+// y un customers-service simulado como servidor gRPC EN MEMORIA (mismo contrato, contracts/customers.proto),
+// compartidos por todas las clases que heredan de aquí porque usan el mismo contexto de Spring.
+// El JwtDecoder es simulado: estas pruebas no necesitan Keycloak (la validación real del token contra
+// Keycloak se prueba en customers-service)
 @SpringBootTest
 @AutoConfigureMockMvc
+@AutoConfigureInProcessTransport
+@Import(PostgresIntegrationTest.FakeCustomersService.class)
 public abstract class PostgresIntegrationTest {
 
     // Clientes que conoce el customers-service simulado
@@ -39,7 +57,7 @@ public abstract class PostgresIntegrationTest {
     protected static final String SLOW = "51015101-0000-4000-8000-000000000003";
     protected static final String LUIS = "1a1a1a1a-0000-4000-8000-000000000002";
 
-    // Tokens simulados (rol CUSTOMER salvo el del asesor); /customers/me responde según el token
+    // Tokens simulados (rol CUSTOMER salvo el del asesor); GetMyCustomer responde según el token
     protected static final String ADMIN_TOKEN = "Bearer token-asesor";
     protected static final String CUSTOMER_TOKEN = "Bearer token-ana";
     protected static final String LUIS_TOKEN = "Bearer token-luis";
@@ -50,9 +68,8 @@ public abstract class PostgresIntegrationTest {
     @ServiceConnection
     static final PostgreSQLContainer POSTGRES = new PostgreSQLContainer("postgres:17.11-alpine");
 
-    // Último Authorization que recibió el customers-service simulado (token relay)
+    // Último authorization que recibió el customers-service simulado en la metadata (token relay)
     protected static final AtomicReference<String> RECEIVED_AUTHORIZATION = new AtomicReference<>();
-    static final HttpServer CUSTOMERS = fakeCustomersService();
 
     static {
         POSTGRES.start();
@@ -60,13 +77,6 @@ public abstract class PostgresIntegrationTest {
 
     @MockitoBean
     protected JwtDecoder jwtDecoder;
-
-    // Feign apunta al simulado en lugar de buscar customers-service en Eureka
-    @DynamicPropertySource
-    static void customersServiceUrl(DynamicPropertyRegistry registry) {
-        registry.add("spring.cloud.openfeign.client.config.customers-service.url",
-                () -> "http://localhost:" + CUSTOMERS.getAddress().getPort());
-    }
 
     @BeforeEach
     void tokens() {
@@ -89,68 +99,73 @@ public abstract class PostgresIntegrationTest {
                 .build();
     }
 
-    // GET /customers/{id} con una respuesta distinta según el cliente, y GET /customers/me según el token
-    private static HttpServer fakeCustomersService() {
-        try {
-            HttpServer server = HttpServer.create(new InetSocketAddress("localhost", 0), 0);
-            server.createContext("/customers/", exchange -> {
-                RECEIVED_AUTHORIZATION.set(exchange.getRequestHeaders().getFirst("Authorization"));
-                String id = exchange.getRequestURI().getPath().substring("/customers/".length());
-                if ("me".equals(id)) {
-                    respondMe(exchange);
-                    return;
+    // customers-service simulado: responde según el id pedido o, en GetMyCustomer, según el token
+    @TestConfiguration(proxyBeanMethods = false)
+    static class FakeCustomersService {
+
+        private static final Metadata.Key<String> AUTHORIZATION =
+                Metadata.Key.of("authorization", Metadata.ASCII_STRING_MARSHALLER);
+        private static final Context.Key<String> CALLER = Context.key("authorization");
+        private static final ScheduledExecutorService LATER = Executors.newSingleThreadScheduledExecutor();
+
+        // Lo que se prueba es accounts: el simulado no valida tokens (eso lo prueba customers-service)
+        @Bean
+        @GlobalServerInterceptor
+        AuthenticationProcessInterceptor fakeCustomersAuthorization(GrpcSecurity grpc) throws Exception {
+            return grpc.authorizeRequests(requests -> requests.allRequests().permitAll()).build();
+        }
+
+        // Anota el authorization recibido y lo deja en el Context de la llamada
+        @Bean
+        @GlobalServerInterceptor
+        ServerInterceptor recordAuthorization() {
+            return new ServerInterceptor() {
+                @Override
+                public <Q, R> ServerCall.Listener<Q> interceptCall(ServerCall<Q, R> call, Metadata headers,
+                                                                   ServerCallHandler<Q, R> next) {
+                    String authorization = headers.get(AUTHORIZATION);
+                    RECEIVED_AUTHORIZATION.set(authorization);
+                    return Contexts.interceptCall(Context.current().withValue(CALLER, authorization), call, headers, next);
                 }
-                switch (id) {
-                    case ANA -> respond(exchange, 200, customer(ANA, "ACTIVE"));
-                    case BLOCKED -> respond(exchange, 200, customer(BLOCKED, "BLOCKED"));
-                    case DOWN -> respond(exchange, 500, "{\"status\":500}");
-                    case SLOW -> {
-                        sleep();
-                        respond(exchange, 200, customer(SLOW, "ACTIVE"));
+            };
+        }
+
+        @Bean
+        CustomersServiceGrpc.CustomersServiceImplBase fakeCustomersGrpc() {
+            return new CustomersServiceGrpc.CustomersServiceImplBase() {
+
+                @Override
+                public void getCustomer(GetCustomerRequest request, StreamObserver<CustomerSummary> response) {
+                    switch (request.getId()) {
+                        case ANA -> reply(response, ANA, CustomerStatus.ACTIVE);
+                        case BLOCKED -> reply(response, BLOCKED, CustomerStatus.BLOCKED);
+                        case DOWN -> response.onError(Status.UNAVAILABLE.asRuntimeException());
+                        // Más lento que el deadline de 2 s: responde a los 3 s sin bloquear un hilo
+                        case SLOW -> LATER.schedule(() -> reply(response, SLOW, CustomerStatus.ACTIVE), 3, TimeUnit.SECONDS);
+                        default -> response.onError(Status.NOT_FOUND.asRuntimeException());
                     }
-                    default -> respond(exchange, 404, "{\"status\":404}");
                 }
-            });
-            server.start();
-            return server;
-        } catch (IOException ex) {
-            throw new UncheckedIOException(ex);
+
+                @Override
+                public void getMyCustomer(GetMyCustomerRequest request, StreamObserver<CustomerSummary> response) {
+                    switch (String.valueOf(CALLER.get())) {
+                        case CUSTOMER_TOKEN -> reply(response, ANA, CustomerStatus.ACTIVE);
+                        case LUIS_TOKEN -> reply(response, LUIS, CustomerStatus.ACTIVE);
+                        case CUSTOMERS_DOWN_TOKEN -> response.onError(Status.UNAVAILABLE.asRuntimeException());
+                        // Sin cliente vinculado (como el asesor o una cuenta de acceso nueva)
+                        default -> response.onError(Status.PERMISSION_DENIED.asRuntimeException());
+                    }
+                }
+            };
         }
-    }
 
-    private static void respondMe(HttpExchange exchange) throws IOException {
-        switch (String.valueOf(RECEIVED_AUTHORIZATION.get())) {
-            case CUSTOMER_TOKEN -> respond(exchange, 200, customer(ANA, "ACTIVE"));
-            case LUIS_TOKEN -> respond(exchange, 200, customer(LUIS, "ACTIVE"));
-            case CUSTOMERS_DOWN_TOKEN -> respond(exchange, 500, "{\"status\":500}");
-            // Sin cliente vinculado (como el asesor o una cuenta de acceso nueva)
-            default -> respond(exchange, 403, "{\"status\":403}");
-        }
-    }
-
-    // Con campos que accounts-service no usa: deben ignorarse
-    private static String customer(String id, String status) {
-        return "{\"id\":\"" + id + "\",\"firstName\":\"Ana\",\"documentNumber\":\"12345678\",\"status\":\"" + status + "\"}";
-    }
-
-    private static void respond(HttpExchange exchange, int status, String body) throws IOException {
-        byte[] bytes = body.getBytes(StandardCharsets.UTF_8);
-        exchange.getResponseHeaders().add("Content-Type", "application/json");
-        try {
-            exchange.sendResponseHeaders(status, bytes.length);
-            exchange.getResponseBody().write(bytes);
-        } catch (IOException ignored) {
-            // El cliente ya cortó por timeout (caso SLOW)
-        } finally {
-            exchange.close();
-        }
-    }
-
-    private static void sleep() {
-        try {
-            Thread.sleep(3000);
-        } catch (InterruptedException ex) {
-            Thread.currentThread().interrupt();
+        private static void reply(StreamObserver<CustomerSummary> response, String id, CustomerStatus status) {
+            try {
+                response.onNext(CustomerSummary.newBuilder().setId(id).setStatus(status).build());
+                response.onCompleted();
+            } catch (IllegalStateException alreadyCancelled) {
+                // El cliente ya se fue por el deadline (caso SLOW)
+            }
         }
     }
 }
