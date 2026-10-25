@@ -143,6 +143,7 @@ Los 401 y 403 responden en formato ProblemDetail (`application/problem+json`), i
 - El JWT va en la metadata `authorization` y se valida con las mismas propiedades que REST (iss, `aud = bank-api`, roles). Sin token o con uno inválido → `UNAUTHENTICATED`; sin el rol → `PERMISSION_DENIED`.
 - `grpc.health.v1.Health` responde sin token, para las probes. *Reflection* solo se activa con `GRPC_REFLECTION_ENABLED=true`, para explorar en local con grpcurl.
 - Si el cliente corta (deadline vencido), el servidor cancela la consulta en curso.
+- **Cache del vínculo** (BANK-65): `/customers/me` y `GetMyCustomer` guardan `identity:v1:{oid}` → id del cliente en Redis (TTL 10 min). Así se evita la consulta cross-partition a Cosmos (~250 ms → ~3 ms). Vincular o desvincular borra esa entrada en el mismo momento, y además la ficha manda: si ya no está vinculada a ese oid, se consulta Cosmos. Un oid sin vínculo no se guarda.
 - La primera llamada después de arrancar puede tardar varios segundos: el cliente de Cosmos se inicia en ~6 s y las claves de Keycloak se descargan con el primer token.
 
 ### api-gateway (punto de entrada)
