@@ -65,7 +65,7 @@ public class Account {
         account.number = number;
         account.balance = new BigDecimal("0.00");
         account.status = AccountStatus.ACTIVE;
-        account.createdAt = Instant.now();
+        account.createdAt = Timestamps.now();
         account.updatedAt = account.createdAt;
         return account;
     }
@@ -76,7 +76,7 @@ public class Account {
     public void deposit(BigDecimal amount) {
         requireActive();
         balance = balance.add(amount);
-        updatedAt = Instant.now();
+        updatedAt = Timestamps.now();
     }
 
     // ¿Puede recibir una transferencia? (BANK-78): se pregunta en T1, antes de mandar el asiento al core
@@ -89,7 +89,7 @@ public class Account {
     // registró (o anuló) el asiento; si la cuenta se bloqueó mientras tanto, igual tiene que recibirlo
     public void receiveSettled(BigDecimal amount) {
         balance = balance.add(amount);
-        updatedAt = Instant.now();
+        updatedAt = Timestamps.now();
     }
 
     // Salida de dinero (débito de una transferencia, BANK-56): activa y con fondos suficientes.
@@ -100,7 +100,7 @@ public class Account {
             throw new InsufficientFundsException(id);
         }
         balance = balance.subtract(amount);
-        updatedAt = Instant.now();
+        updatedAt = Timestamps.now();
     }
 
     private void requireActive() {

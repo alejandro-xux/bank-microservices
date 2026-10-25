@@ -1,0 +1,81 @@
+# CI de bank-microservices (BANK-83, medida en el spike BANK-82). Cada PR a main corre las pruebas de los 7 módulos en
+# paralelo, y protect-main exige el check ci-ok para mergear. Cada módulo es un proyecto Gradle propio (con
+# includeBuild de platform-bom y contracts), así que se prueba completo en su job: siempre todos, porque un cambio en
+# contracts o en el BOM afecta a los demás
+name: ci
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+
+# Solo leer el repo: este workflow no publica nada
+permissions:
+  contents: read
+
+# Un push nuevo al mismo PR cancela la corrida anterior (ya quedó vieja). En main nunca se cancela: cada merge se prueba
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  test:
+    name: ${{ matrix.module }}
+    runs-on: ubuntu-latest
+    # Sin esto, un contenedor colgado tendría el job corriendo hasta 6 horas
+    timeout-minutes: 20
+    strategy:
+      # Que un módulo que falla no cancele a los demás: el PR muestra todo lo que está roto de una vez
+      fail-fast: false
+      matrix:
+        module:
+          - contracts
+          - customers-service
+          - accounts-service
+          - notifications-service
+          - api-gateway
+          - config-server
+          - discovery-server
+    steps:
+      # Versiones fijadas por commit (un tag se puede mover); Dependabot las actualiza (BANK-85)
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - uses: actions/setup-java@b843ebf9b913146b38da2eaa7aeddf76074ae1ad # v6.1.0
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      # Caché de Gradle: solo la escribe main y los PR la leen (spike: 3:33 en frío, 2:51 en caliente)
+      - uses: gradle/actions/setup-gradle@3f5f9adaf7d9fecd50b5935e54106014257a94e6 # v6.4.0
+
+      # Las imágenes de Testcontainers las baja cada prueba al arrancar (4-13 s por módulo, no vale cachearlas)
+      - name: Pruebas
+        working-directory: ${{ matrix.module }}
+        run: ./gradlew test --no-daemon
+
+      - name: Resumen
+        if: always()
+        run: python3 -I .github/scripts/test-summary.py "${{ matrix.module }}" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Reportes de pruebas
+        if: failure()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: reportes-${{ matrix.module }}
+          path: ${{ matrix.module }}/build/reports/tests/
+          retention-days: 7
+
+  # El único check que exige protect-main: si mañana hay 8 módulos, la ruleset no cambia. Corre SIEMPRE y falla a
+  # propósito si la matriz no terminó en success: un job saltado o cancelado cuenta como "pasó" para GitHub
+  ci-ok:
+    name: ci-ok
+    needs: test
+    if: always()
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Todas las pruebas pasaron
+        run: |
+          echo "Resultado de la matriz: ${{ needs.test.result }}"
+          test "${{ needs.test.result }}" = "success"

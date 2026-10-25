@@ -3,6 +3,7 @@ package com.alejandro.bank.accounts.service;
 import com.alejandro.bank.accounts.domain.Account;
 import com.alejandro.bank.accounts.domain.Currency;
 import com.alejandro.bank.accounts.domain.Movement;
+import com.alejandro.bank.accounts.domain.Timestamps;
 import com.alejandro.bank.accounts.domain.Transfer;
 import com.alejandro.bank.accounts.domain.TransferStatus;
 import com.alejandro.bank.accounts.exception.SameAccountException;
@@ -77,7 +78,7 @@ public class TransferExecutor {
     // confirmarse sola, en el momento
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     public boolean complete(UUID transferId) {
-        Instant now = Instant.now();
+        Instant now = Timestamps.now();
         if (transferRepository.resolve(transferId, TransferStatus.COMPLETED, null, now) == 0) {
             return false;
         }
@@ -96,7 +97,7 @@ public class TransferExecutor {
     // estaba resuelta
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     public boolean fail(UUID transferId, String reason) {
-        Instant now = Instant.now();
+        Instant now = Timestamps.now();
         if (transferRepository.resolve(transferId, TransferStatus.FAILED, reason, now) == 0) {
             return false;
         }

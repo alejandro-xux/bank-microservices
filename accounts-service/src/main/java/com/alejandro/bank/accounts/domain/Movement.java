@@ -88,7 +88,7 @@ public class Movement {
         movement.amount = amount;
         movement.balanceAfter = balanceAfter;
         movement.transferId = transferId;
-        movement.createdAt = Instant.now();
+        movement.createdAt = Timestamps.now();
         return movement;
     }
 

@@ -400,11 +400,19 @@ cd config-server && ./gradlew test
 cd discovery-server && ./gradlew test
 cd api-gateway && ./gradlew test
 cd accounts-service && ./gradlew test
+cd notifications-service && ./gradlew test
 cd contracts && ./gradlew test        # compatibilidad del contrato en el cable
 ```
 
 Para medir la latencia de la comunicación accounts → customers con el entorno arriba: `cd tests/perf && ./gradlew run` ([detalle](tests/perf/README.md)).
 No necesitan el config-server ni Eureka encendidos (las de customers-service leen `config-repo/` directamente y no se registran) ni credenciales de Azure (Cosmos está simulado), pero sí Docker encendido: Testcontainers levanta Redis para las pruebas de cache y un Keycloak con `infra/keycloak/bank-realm.json` para probar la seguridad con tokens reales (firma, `iss`, `aud`, roles y `oid`), tanto en customers-service como en el api-gateway (este último frente a un customers-service simulado). En accounts-service levanta un PostgreSQL real: se prueban las migraciones, la validación del esquema y sus restricciones; el customers-service simulado es un servidor gRPC en memoria con el mismo contrato.
+
+### CI (GitHub Actions, BANK-83)
+Cada PR a `main` corre `.github/workflows/ci.yml`: las pruebas de los 7 módulos en paralelo, en una máquina Linux de GitHub, con la caché de Gradle. Tarda unos 3 minutos. **No se puede mergear si el check `ci-ok` no está en verde**: es lo que exige la ruleset `protect-main`.
+
+- **Por qué falló:** en el PR, *Checks → ci* → el job del módulo en rojo. El resumen dice cuántas pruebas corrieron, cuáles fallaron y con qué mensaje (lo arma `.github/scripts/test-summary.py` leyendo los XML). Los reportes HTML completos quedan como artifact `reportes-<módulo>` por 7 días.
+- **Pasa en tu Mac y falla en la CI:** la CI corre en Linux, y hay diferencias reales. La primera que encontró: allí `Instant.now()` tiene nanosegundos y PostgreSQL guarda microsegundos, así que toda fecha que se guarda pasa por `Timestamps.now()`.
+- Un push nuevo al mismo PR cancela la corrida anterior. En `main` cada merge se prueba completo.
 
 ## Gestión
 - Jira: proyecto `BANK`

@@ -85,7 +85,7 @@ public class Transfer {
         transfer.toAccountId = toAccountId;
         transfer.amount = amount;
         transfer.currency = currency;
-        transfer.createdAt = Instant.now();
+        transfer.createdAt = Timestamps.now();
         transfer.status = TransferStatus.PENDING;
         transfer.coreOperation = coreOperation;
         return transfer;
