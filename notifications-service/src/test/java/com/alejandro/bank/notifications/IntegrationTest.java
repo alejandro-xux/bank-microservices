@@ -22,6 +22,10 @@ import org.springframework.context.annotation.Import;
 import org.springframework.grpc.server.GlobalServerInterceptor;
 import org.springframework.grpc.server.security.AuthenticationProcessInterceptor;
 import org.springframework.grpc.server.security.GrpcSecurity;
+import org.springframework.test.context.DynamicPropertyRegistry;
+import org.springframework.test.context.DynamicPropertySource;
+import org.testcontainers.containers.GenericContainer;
+import org.testcontainers.containers.wait.strategy.Wait;
 import org.testcontainers.kafka.KafkaContainer;
 import org.testcontainers.postgresql.PostgreSQLContainer;
 
@@ -33,8 +37,8 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 
-// Base de las pruebas de integración: PostgreSQL y Kafka reales (mismas versiones que infra/docker-compose.yml,
-// Kafka sin creación automática de topics) y un customers-service simulado como servidor gRPC EN MEMORIA (mismo
+// Base de las pruebas de integración: PostgreSQL, Kafka y Mailpit reales (mismas versiones que
+// infra/docker-compose.yml, Kafka sin creación automática de topics) y un customers-service simulado como servidor gRPC EN MEMORIA (mismo
 // contrato, contracts/customers.proto). Las clases que heredan comparten los contenedores.
 // Cada contexto de Spring consume con su PROPIO grupo: Spring deja vivos en caché los contextos de otras clases,
 // y con el mismo grupo sus listeners se repartirían las particiones (el evento de una prueba le llegaría a otra)
@@ -57,18 +61,35 @@ public abstract class IntegrationTest {
     protected static final KafkaContainer KAFKA = new KafkaContainer("apache/kafka:4.3.1")
             .withEnv("KAFKA_AUTO_CREATE_TOPICS_ENABLE", "false");
 
+    // SMTP de prueba: el mismo Mailpit del compose, con su API para leer lo que llegó (MailpitInbox)
+    protected static final GenericContainer<?> MAILPIT = new GenericContainer<>("axllent/mailpit:v1.31.4")
+            .withExposedPorts(1025, 8025)
+            .waitingFor(Wait.forHttp("/readyz").forPort(8025));
+
     // Cada authorization que recibió el customers-service simulado, en orden
     protected static final Queue<String> RECEIVED_AUTHORIZATIONS = new ConcurrentLinkedQueue<>();
 
     static {
         POSTGRES.start();
         KAFKA.start();
+        MAILPIT.start();
         try (AdminClient admin = AdminClient.create(Map.of(AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG, KAFKA.getBootstrapServers()))) {
             admin.createTopics(List.of(new NewTopic(TransferTopics.TOPIC, 3, (short) 1),
                     new NewTopic(TransferTopics.DEAD_LETTER_TOPIC, 3, (short) 1))).all().get();
         } catch (Exception ex) {
             throw new IllegalStateException("No se pudieron crear los topics de prueba", ex);
         }
+    }
+
+    // Las propiedades dinámicas ganan a las de config-repo (que se importan y pisarían a application-test.yaml)
+    @DynamicPropertySource
+    static void smtp(DynamicPropertyRegistry registry) {
+        registry.add("spring.mail.host", MAILPIT::getHost);
+        registry.add("spring.mail.port", () -> MAILPIT.getMappedPort(1025));
+    }
+
+    protected static MailpitInbox inbox() {
+        return new MailpitInbox("http://" + MAILPIT.getHost() + ":" + MAILPIT.getMappedPort(8025));
     }
 
     @TestConfiguration(proxyBeanMethods = false)

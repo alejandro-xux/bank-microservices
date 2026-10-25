@@ -1,20 +1,12 @@
 package com.alejandro.bank.notifications.customers;
 
-import com.alejandro.bank.notifications.IntegrationTest;
-import org.junit.jupiter.api.BeforeEach;
+import com.alejandro.bank.notifications.TokenMockedIntegrationTest;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.security.oauth2.client.OAuth2AuthorizedClient;
-import org.springframework.security.oauth2.client.OAuth2AuthorizedClientManager;
-import org.springframework.security.oauth2.client.registration.ClientRegistration;
-import org.springframework.security.oauth2.core.AuthorizationGrantType;
 import org.springframework.security.oauth2.core.OAuth2AuthorizationException;
-import org.springframework.security.oauth2.core.OAuth2AccessToken;
 import org.springframework.security.oauth2.core.OAuth2Error;
-import org.springframework.test.context.bean.override.mockito.MockitoBean;
 
 import java.time.Duration;
-import java.time.Instant;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -23,23 +15,10 @@ import static org.mockito.Mockito.when;
 
 // BANK-71: cómo se traduce cada respuesta de GetContact. El token es simulado; el real de Keycloak se prueba en
 // ServiceTokenKeycloakTest
-class CustomerContactsTest extends IntegrationTest {
-
-    @MockitoBean
-    OAuth2AuthorizedClientManager serviceTokenManager;
+class CustomerContactsTest extends TokenMockedIntegrationTest {
 
     @Autowired
     CustomerContacts contacts;
-
-    @BeforeEach
-    void serviceToken() {
-        RECEIVED_AUTHORIZATIONS.clear();
-        ClientRegistration registration = ClientRegistration.withRegistrationId("bank-api").clientId("notifications-service")
-                .authorizationGrantType(AuthorizationGrantType.CLIENT_CREDENTIALS).tokenUri("http://keycloak/token").build();
-        OAuth2AccessToken token = new OAuth2AccessToken(OAuth2AccessToken.TokenType.BEARER, "token-servicio",
-                Instant.now(), Instant.now().plusSeconds(300));
-        when(serviceTokenManager.authorize(any())).thenReturn(new OAuth2AuthorizedClient(registration, "notifications-service", token));
-    }
 
     @Test
     void returnsTheContactAndSendsTheServiceToken() {

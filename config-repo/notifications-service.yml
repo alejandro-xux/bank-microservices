@@ -26,6 +26,16 @@ spring:
         # Lo que recomienda Event Hubs para no caer en rebalanceos continuos (spike BANK-66, K12)
         request.timeout.ms: 60000
         session.timeout.ms: 30000
+  # Correo (BANK-72). En local, Mailpit (BANK-67: SMTP en :1025, bandeja en http://localhost:8025); en Azure, un
+  # proveedor real (Azure Communication Services Email) con usuario y contraseña por variable
+  mail:
+    host: ${MAIL_HOST:localhost}
+    port: ${MAIL_PORT:1025}
+    properties:
+      # Sin esto JavaMail espera PARA SIEMPRE a un servidor que no responde: el consumidor quedaría colgado
+      mail.smtp.connectiontimeout: 5000
+      mail.smtp.timeout: 5000
+      mail.smtp.writetimeout: 5000
   # customers-service por gRPC (BANK-71): dirección por configuración, como en accounts-service
   grpc:
     client:
@@ -51,10 +61,13 @@ spring:
           bank-identity:
             token-uri: ${AUTH_TOKEN_URI:http://localhost:8180/realms/bank/protocol/openid-connect/token}
 
-# Plazo máximo de cada llamada a customers-service
 bank:
+  # Plazo máximo de cada llamada a customers-service
   customers:
     deadline: ${CUSTOMERS_DEADLINE:2s}
+  notifications:
+    mail:
+      from: ${MAIL_FROM:avisos@bank.local}
 
 server:
   port: 8083

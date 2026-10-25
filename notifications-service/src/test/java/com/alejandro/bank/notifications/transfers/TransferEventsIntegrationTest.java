@@ -2,7 +2,7 @@ package com.alejandro.bank.notifications.transfers;
 
 import com.alejandro.bank.contracts.transfers.v1.TransferCompleted;
 import com.alejandro.bank.contracts.transfers.v1.TransferTopics;
-import com.alejandro.bank.notifications.IntegrationTest;
+import com.alejandro.bank.notifications.TokenMockedIntegrationTest;
 import org.apache.kafka.clients.admin.AdminClient;
 import org.apache.kafka.clients.admin.AdminClientConfig;
 import org.apache.kafka.clients.producer.KafkaProducer;
@@ -25,7 +25,7 @@ import static org.mockito.Mockito.timeout;
 import static org.mockito.Mockito.verify;
 
 // BANK-70: el servicio arranca con su base (Flyway V1) y el consumidor recibe los eventos de bank.transfers.v1.
-class TransferEventsIntegrationTest extends IntegrationTest {
+class TransferEventsIntegrationTest extends TokenMockedIntegrationTest {
 
     @MockitoSpyBean
     TransferNotifier notifier;
@@ -47,6 +47,7 @@ class TransferEventsIntegrationTest extends IntegrationTest {
         TransferCompleted event = TransferCompleted.newBuilder()
                 .setEventId(eventId).setTransferId(UUID.randomUUID().toString())
                 .setFromAccountNumber("001-0000000001-6").setToAccountNumber("001-0000000003-2")
+                .setFromCustomerId(ANA).setToCustomerId(LUIS)
                 .setAmount("25.00").setCurrency("PEN").build();
 
         // Como lo publica el relay de accounts-service (BANK-69): bytes del Protobuf, clave = cuenta origen
