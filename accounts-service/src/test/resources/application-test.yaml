@@ -1,0 +1,12 @@
+spring:
+  # Las pruebas no usan el config-server: leen los mismos archivos de config-repo/ directamente.
+  # La base la levanta Testcontainers (@ServiceConnection reemplaza url, usuario y contraseña)
+  config:
+    import:
+      - file:../config-repo/application.yml
+      - file:../config-repo/accounts-service.yml
+
+# Las pruebas no se registran en Eureka (no necesitan el discovery-server)
+eureka:
+  client:
+    enabled: false

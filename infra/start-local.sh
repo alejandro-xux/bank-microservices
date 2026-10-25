@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # Levanta el entorno local en orden y espera a que cada pieza esté sana (BANK-49):
-#   Docker (Redis + Keycloak) → config-server → discovery-server → customers-service → api-gateway
+#   Docker (Redis, PostgreSQL y Keycloak) → config-server → discovery-server → customers-service
+#   → accounts-service → api-gateway
 # Uso: infra/start-local.sh          Apagar: infra/stop-local.sh [--all]
 set -euo pipefail
 
@@ -46,18 +47,29 @@ start() {
   fi
 }
 
-echo "▶ Docker: Redis y Keycloak"
+echo "▶ Docker: Redis, PostgreSQL y Keycloak"
 docker compose -f "$ROOT/infra/docker-compose.yml" up -d > /dev/null
 if ! wait_for "http://localhost:8180/realms/bank/.well-known/openid-configuration" 120; then
   echo "✗ Keycloak no respondió en :8180" >&2
   exit 1
 fi
-echo "• redis :6380 y keycloak :8180 listos"
+# PostgreSQL está listo cuando su health check (pg_isready) pasa a healthy
+waited=0
+until [ "$(docker inspect -f '{{.State.Health.Status}}' bank-postgres)" = "healthy" ]; do
+  waited=$((waited + 2))
+  if [ "$waited" -ge 60 ]; then
+    echo "✗ PostgreSQL no respondió en :5433" >&2
+    exit 1
+  fi
+  sleep 2
+done
+echo "• redis :6380, postgres :5433 y keycloak :8180 listos"
 
 echo "▶ Servicios"
 start config-server 8888 /actuator/health
 start discovery-server 8761 /actuator/health
 start customers-service 8081 /actuator/health/liveness
+start accounts-service 8082 /actuator/health/readiness
 start api-gateway 8080 /actuator/health/liveness
 
 # El gateway enruta cuando ya tiene la lista de Eureka (~20-30 s): se prueba con el asesor local
@@ -83,9 +95,10 @@ cat <<EOF
 ✅ Entorno local listo
    API (gateway)   http://localhost:8080/api/customers/...
    Swagger         http://localhost:8081/swagger-ui.html
+   Accounts        http://localhost:8082/actuator/health
    Eureka          http://localhost:8761
    Config          http://localhost:8888/customers-service/default
    Keycloak        http://localhost:8180/admin  (admin / admin)
    Logs            $LOGS
-   Apagar          infra/stop-local.sh   (con --all también Redis y Keycloak)
+   Apagar          infra/stop-local.sh   (con --all también Redis, PostgreSQL y Keycloak)
 EOF
