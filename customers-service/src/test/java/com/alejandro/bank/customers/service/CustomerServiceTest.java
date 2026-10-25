@@ -6,6 +6,7 @@ import com.alejandro.bank.customers.exception.CustomerAlreadyExistsException;
 import com.alejandro.bank.customers.exception.CustomerModifiedException;
 import com.alejandro.bank.customers.exception.CustomerNotFoundException;
 import com.alejandro.bank.customers.exception.CustomerPreconditionFailedException;
+import com.alejandro.bank.customers.exception.IdentityAlreadyLinkedException;
 import com.alejandro.bank.customers.repository.CustomerRepository;
 import com.azure.cosmos.CosmosException;
 import com.azure.spring.data.cosmos.exception.CosmosAccessException;
@@ -323,6 +324,107 @@ class CustomerServiceTest {
         StepVerifier.create(customerService.findByIdentityId("oid-ana"))
                 .expectNext(first)
                 .verifyComplete();
+    }
+
+    // ---- Vínculo cuenta ↔ cliente (BANK-48) ----
+
+    private static final String ANA_OID = "4f8c2a1e-6b3d-4c9a-9e7f-2d5b8a1c3e01";
+
+    @Test
+    void linkIdentityChangesOnlyIdentityIdAndEvictsCache() {
+        Customer customer = customerWithContacts();
+        List<Email> emailsBefore = customer.getEmails();
+        when(customerRepository.findById("abc-123")).thenReturn(Mono.just(customer));
+        when(customerRepository.findByIdentityId(ANA_OID)).thenReturn(Flux.empty());
+        when(customerRepository.save(any(Customer.class))).thenAnswer(invocation -> Mono.just(invocation.getArgument(0)));
+
+        StepVerifier.create(customerService.linkIdentity("abc-123", ANA_OID, "\"v1\""))
+                .assertNext(saved -> {
+                    assertThat(saved.getIdentityId()).isEqualTo(ANA_OID);
+                    assertThat(saved.getEmails()).isEqualTo(emailsBefore);
+                    assertThat(saved.getUpdatedAt()).isAfter(Instant.parse("2026-01-01T00:00:00Z"));
+                })
+                .verifyComplete();
+
+        verify(customerCache).evict("abc-123");
+    }
+
+    @Test
+    void linkingTheSameAccountAgainIsIdempotent() {
+        Customer customer = customerWithContacts();
+        customer.setIdentityId(ANA_OID);
+        when(customerRepository.findById("abc-123")).thenReturn(Mono.just(customer));
+
+        StepVerifier.create(customerService.linkIdentity("abc-123", ANA_OID, null))
+                .assertNext(result -> assertThat(result.getIdentityId()).isEqualTo(ANA_OID))
+                .verifyComplete();
+
+        verify(customerRepository, never()).save(any());
+        verify(customerRepository, never()).findByIdentityId(anyString());
+    }
+
+    @Test
+    void linkingACustomerThatHasAnotherAccountReturns409() {
+        Customer customer = customerWithContacts();
+        customer.setIdentityId("7b2e9d4c-1a5f-4e8b-b3c6-9f0a2d4e6b02");
+        when(customerRepository.findById("abc-123")).thenReturn(Mono.just(customer));
+
+        StepVerifier.create(customerService.linkIdentity("abc-123", ANA_OID, null))
+                .verifyError(IdentityAlreadyLinkedException.class);
+
+        verify(customerRepository, never()).save(any());
+    }
+
+    @Test
+    void linkingAnAccountUsedByAnotherCustomerReturns409() {
+        Customer other = Customer.builder().id("def-456").identityId(ANA_OID).build();
+        when(customerRepository.findById("abc-123")).thenReturn(Mono.just(customerWithContacts()));
+        when(customerRepository.findByIdentityId(ANA_OID)).thenReturn(Flux.just(other));
+
+        StepVerifier.create(customerService.linkIdentity("abc-123", ANA_OID, null))
+                .verifyError(IdentityAlreadyLinkedException.class);
+
+        verify(customerRepository, never()).save(any());
+    }
+
+    @Test
+    void linkIdentityWithStaleIfMatchReturns412() {
+        when(customerRepository.findById("abc-123")).thenReturn(Mono.just(customerWithContacts()));
+
+        StepVerifier.create(customerService.linkIdentity("abc-123", ANA_OID, "\"v0\""))
+                .verifyError(CustomerPreconditionFailedException.class);
+
+        verify(customerRepository, never()).save(any());
+    }
+
+    @Test
+    void linkIdentityOfUnknownCustomerReturns404() {
+        when(customerRepository.findById("no-existe")).thenReturn(Mono.empty());
+
+        StepVerifier.create(customerService.linkIdentity("no-existe", ANA_OID, null))
+                .verifyError(CustomerNotFoundException.class);
+    }
+
+    @Test
+    void unlinkIdentityRemovesItAndEvictsCache() {
+        Customer customer = customerWithContacts();
+        customer.setIdentityId(ANA_OID);
+        when(customerRepository.findById("abc-123")).thenReturn(Mono.just(customer));
+        when(customerRepository.save(any(Customer.class))).thenAnswer(invocation -> Mono.just(invocation.getArgument(0)));
+
+        StepVerifier.create(customerService.unlinkIdentity("abc-123", null)).verifyComplete();
+
+        verify(customerRepository).save(argThat(saved -> saved.getIdentityId() == null));
+        verify(customerCache).evict("abc-123");
+    }
+
+    @Test
+    void unlinkingACustomerWithoutAccountDoesNothing() {
+        when(customerRepository.findById("abc-123")).thenReturn(Mono.just(customerWithContacts()));
+
+        StepVerifier.create(customerService.unlinkIdentity("abc-123", null)).verifyComplete();
+
+        verify(customerRepository, never()).save(any());
     }
 
     private Customer customerWithContacts() {

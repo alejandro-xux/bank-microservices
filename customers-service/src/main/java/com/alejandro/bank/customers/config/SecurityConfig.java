@@ -40,6 +40,10 @@ public class SecurityConfig {
                         // Registrar y buscar clientes: solo el asesor
                         .pathMatchers(HttpMethod.POST, "/customers").hasRole(ADMIN)
                         .pathMatchers(HttpMethod.GET, "/customers", "/customers/search").hasRole(ADMIN)
+                        // Vincular/desvincular la cuenta de acceso: solo el asesor. Sin esta regla, /customers/**
+                        // dejaría a un CUSTOMER unir su cuenta a la ficha de otro cliente (BANK-48)
+                        .pathMatchers(HttpMethod.PUT, "/customers/*/identity").hasRole(ADMIN)
+                        .pathMatchers(HttpMethod.DELETE, "/customers/*/identity").hasRole(ADMIN)
                         // Mis datos: solo un cliente (el asesor no tiene ficha de cliente)
                         .pathMatchers(HttpMethod.GET, "/customers/me").hasRole(CUSTOMER)
                         // /customers/{id}: asesor o cliente; que sea el dueño lo revisa CustomerAccessPolicy

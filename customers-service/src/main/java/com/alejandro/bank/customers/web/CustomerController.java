@@ -15,10 +15,12 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -108,6 +110,34 @@ public class CustomerController {
         return accessPolicy.checkAccess(id, authentication)
                 .then(Mono.defer(() -> customerService.updateContact(id, request.email(), request.phone(), ifMatch)))
                 .map(CustomerController::withETag);
+    }
+
+    @PutMapping("/{id}/identity")
+    @Operation(summary = "Vincular un cliente con su cuenta de acceso (solo ADMIN)")
+    @ApiResponse(responseCode = "200", description = "Cuenta vinculada (o ya lo estaba)")
+    @ApiResponse(responseCode = "400", description = "identityId no es un UUID")
+    @ApiResponse(responseCode = "404", description = "No existe un cliente con ese id")
+    @ApiResponse(responseCode = "409", description = "La cuenta está en otro cliente, el cliente tiene otra cuenta o hubo una modificación concurrente")
+    @ApiResponse(responseCode = "412", description = "If-Match no coincide con la versión actual")
+    public Mono<ResponseEntity<CustomerResponse>> linkIdentity(
+            @PathVariable String id,
+            @RequestHeader(value = HttpHeaders.IF_MATCH, required = false) String ifMatch,
+            @Valid @RequestBody LinkIdentityRequest request) {
+        return customerService.linkIdentity(id, request.identityId(), ifMatch)
+                .map(CustomerController::withETag);
+    }
+
+    @DeleteMapping("/{id}/identity")
+    @Operation(summary = "Desvincular un cliente de su cuenta de acceso (solo ADMIN)")
+    @ApiResponse(responseCode = "204", description = "Cuenta desvinculada (o no tenía)")
+    @ApiResponse(responseCode = "404", description = "No existe un cliente con ese id")
+    @ApiResponse(responseCode = "409", description = "El cliente fue modificado por otra operación")
+    @ApiResponse(responseCode = "412", description = "If-Match no coincide con la versión actual")
+    public Mono<ResponseEntity<Void>> unlinkIdentity(
+            @PathVariable String id,
+            @RequestHeader(value = HttpHeaders.IF_MATCH, required = false) String ifMatch) {
+        return customerService.unlinkIdentity(id, ifMatch)
+                .thenReturn(ResponseEntity.noContent().build());
     }
 
     // La versión del documento (_etag de Cosmos) viaja en el header ETag
