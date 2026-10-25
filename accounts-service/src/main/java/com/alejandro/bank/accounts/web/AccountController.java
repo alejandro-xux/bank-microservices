@@ -4,6 +4,7 @@ import com.alejandro.bank.accounts.service.AccountService;
 import com.alejandro.bank.accounts.service.DepositService;
 import com.alejandro.bank.accounts.service.MovementService;
 import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
@@ -18,6 +19,7 @@ import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
@@ -81,13 +83,23 @@ public class AccountController {
 
     @PostMapping("/{id}/deposits")
     @Operation(summary = "Registrar un depósito en ventanilla (solo asesor), en la moneda de la cuenta")
-    @ApiResponse(responseCode = "201", description = "Movimiento CREDIT registrado; balanceAfter es el saldo nuevo")
-    @ApiResponse(responseCode = "400", description = "Monto ausente, no positivo o con más de 2 decimales")
+    @ApiResponse(responseCode = "201", description = "Movimiento CREDIT registrado; balanceAfter es el saldo nuevo. "
+            + "En un reintento con la misma clave, el mismo movimiento con el header Idempotent-Replayed: true")
+    @ApiResponse(responseCode = "400", description = "Monto ausente, no positivo o con más de 2 decimales, o falta la Idempotency-Key")
     @ApiResponse(responseCode = "404", description = "La cuenta no existe")
+    @ApiResponse(responseCode = "409", description = "La Idempotency-Key ya se usó con otros datos")
     @ApiResponse(responseCode = "422", description = "La cuenta no está activa")
-    public ResponseEntity<MovementResponse> deposit(@PathVariable UUID id, @Valid @RequestBody DepositRequest request) {
-        return ResponseEntity.status(HttpStatus.CREATED)
-                .body(MovementResponse.from(depositService.deposit(id, request.amount())));
+    public ResponseEntity<MovementResponse> deposit(
+            @PathVariable UUID id,
+            @Parameter(description = "UUID nuevo por cada depósito; el mismo en cada reintento")
+            @RequestHeader(IdempotencyHeaders.IDEMPOTENCY_KEY) UUID idempotencyKey,
+            @Valid @RequestBody DepositRequest request) {
+        DepositService.Result result = depositService.deposit(idempotencyKey, id, request.amount());
+        ResponseEntity.BodyBuilder response = ResponseEntity.status(HttpStatus.CREATED);
+        if (result.replayed()) {
+            response.header(IdempotencyHeaders.IDEMPOTENT_REPLAYED, "true");
+        }
+        return response.body(MovementResponse.from(result.movement()));
     }
 
     @GetMapping("/{id}/movements")

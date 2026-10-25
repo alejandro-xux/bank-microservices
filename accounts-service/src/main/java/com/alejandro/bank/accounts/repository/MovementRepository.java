@@ -7,9 +7,13 @@ import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
+import java.util.Optional;
 import java.util.UUID;
 
 public interface MovementRepository extends JpaRepository<Movement, UUID> {
+
+    // El depósito que ya se registró con esta Idempotency-Key (UNIQUE en la base, BANK-64)
+    Optional<Movement> findByIdempotencyKey(UUID idempotencyKey);
 
     // Historial de una cuenta en UNA sentencia (BANK-57): la otra cuenta de cada transferencia sale
     // del mismo JOIN, sin una consulta por movimiento (N+1). LEFT JOIN para no perder los depósitos

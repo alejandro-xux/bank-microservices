@@ -34,9 +34,9 @@ class DepositRollbackIntegrationTest extends PostgresIntegrationTest {
                         + "values (?, ?, ?, 'AHORROS', 'PEN', 1500.50, 'ACTIVE', now(), now())",
                 account, "001-" + account.toString().substring(0, 10), ANA);
         doThrow(new IllegalStateException("falla simulada al guardar el movimiento"))
-                .when(movementRepository).save(any());
+                .when(movementRepository).saveAndFlush(any());
 
-        assertThatThrownBy(() -> depositService.deposit(account, new BigDecimal("150.00")))
+        assertThatThrownBy(() -> depositService.deposit(UUID.randomUUID(), account, new BigDecimal("150.00")))
                 .isInstanceOf(IllegalStateException.class);
 
         assertThat(jdbc.queryForObject("select balance::text from account where id = ?", String.class, account))
