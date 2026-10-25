@@ -1,0 +1,12 @@
+spring:
+  # Las pruebas no usan el config-server: leen los mismos archivos de config-repo/ directamente.
+  # PostgreSQL y Kafka los levanta Testcontainers (@ServiceConnection reemplaza url y bootstrap-servers)
+  config:
+    import:
+      - file:../config-repo/application.yml
+      - file:../config-repo/notifications-service.yml
+
+# Las pruebas no se registran en Eureka (no necesitan el discovery-server)
+eureka:
+  client:
+    enabled: false

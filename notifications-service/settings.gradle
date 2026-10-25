@@ -1,0 +1,4 @@
+rootProject.name = 'notifications-service'
+includeBuild('../platform-bom')
+// Contratos internos: el evento TransferCompleted (BANK-68)
+includeBuild('../contracts')

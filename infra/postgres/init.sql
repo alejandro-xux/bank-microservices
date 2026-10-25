@@ -6,3 +6,8 @@
 CREATE ROLE accounts LOGIN PASSWORD 'accounts-local';
 CREATE DATABASE accounts OWNER accounts;
 REVOKE ALL ON DATABASE accounts FROM PUBLIC;
+
+-- notifications-service (BANK-70): registra qué eventos ya procesó, para no avisar dos veces
+CREATE ROLE notifications LOGIN PASSWORD 'notifications-local';
+CREATE DATABASE notifications OWNER notifications;
+REVOKE ALL ON DATABASE notifications FROM PUBLIC;

@@ -11,7 +11,7 @@ programación reactiva, Kafka, Azure y Quarkus.
 | api-gateway | Spring Cloud Gateway Server WebFlux (punto de entrada único, valida el JWT) |
 | customers-service | Spring WebFlux + Cosmos DB + Redis (cache) |
 | accounts-service | Spring MVC + JPA + PostgreSQL |
-| notifications-service | Spring Kafka + Resilience4j |
+| notifications-service | Spring Kafka + PostgreSQL: avisos al cliente a partir de los eventos (sin API pública) |
 | contracts | Contratos internos: gRPC (`customers.proto`) y eventos de Kafka (`transfer_events.proto`), con su código generado compartido por los servicios ([detalle](contracts/README.md)) |
 
 ## Entorno local
@@ -186,7 +186,7 @@ curl -H "Authorization: Bearer $TOKEN" http://localhost:8080/api/customers/me
 - **Ruta de accounts-service** (BANK-58): `/api/accounts/**` y `/api/transfers/**` → `lb://accounts-service` (o `ACCOUNTS_SERVICE_URI`), sin el prefijo `/api`. Tiene el mismo límite por usuario (cada ruta con su propio balde: agotar el de customers no bloquea las transferencias) y su propio circuito `accounts`, independiente del de customers. Ese circuito **no cuenta el 503**: accounts lo responde a propósito cuando customers-service no está, y contarlo abriría el circuito de accounts por culpa de otro servicio. `Idempotency-Key` e `Idempotent-Replayed` pasan tal cual.
 - Una transferencia que tarda más de 3 s recibe 503 del gateway aunque se haya hecho. Por eso la app debe **reintentar con la misma `Idempotency-Key`**: recibirá la transferencia real (201 + `Idempotent-Replayed`) sin que se cobre dos veces.
 
-Orden de arranque: Docker → config-server → discovery-server → customers-service → accounts-service → api-gateway.
+Orden de arranque: Docker → config-server → discovery-server → customers-service → accounts-service → notifications-service → api-gateway.
 
 ### accounts-service
 Cuentas, saldos y transferencias, en el **puerto 8082**. Spring MVC con hilos virtuales, JPA y PostgreSQL (`bank-postgres`, base y usuario `accounts`; ver `infra/postgres/init.sql`). Necesita el config-server y PostgreSQL arriba. La configuración está en `config-repo/accounts-service.yml`; en Azure la base se define con `DB_HOST`, `DB_PORT`, `DB_NAME`, `DB_USERNAME` y `DB_PASSWORD` (por defecto, el contenedor local).
@@ -284,6 +284,26 @@ relay (cada 500 ms, lotes de 100) ─▶ Kafka (acks=all) ─▶ marca la fila c
 
 - El vínculo entre cuenta de acceso y cliente no se copia en accounts-service: se pregunta cada vez, porque el asesor puede cambiarlo (BANK-48).
 - Si customers-service no responde, las consultas de un cliente devuelven 503 (las del asesor no dependen de él). Cuando vuelve, accounts-service lo encuentra en un par de segundos: el canal gRPC apunta a una dirección fija y se reconecta solo. Con Feign y Eureka tardaba ~1 minuto, por la copia de Eureka y la caché del load balancer.
+
+### notifications-service
+Avisa al cliente de lo que pasa en sus cuentas, a partir de los eventos de Kafka (E7). No tiene API pública ni ruta en el gateway: solo actuator en el puerto **8083** (`/actuator/health`).
+
+```bash
+cd notifications-service
+./gradlew bootRun     # o infra/start-local.sh, que lo levanta después de accounts-service
+```
+
+- Consume `bank.transfers.v1` con el consumer group **`notifications-service`**. La primera vez que arranca el grupo lee el topic desde el principio, así que un evento publicado antes de desplegar el servicio también se avisa. Cada grupo lleva su propio offset: otro consumidor del mismo topic (fraud-service) no le quita mensajes.
+- Su propia base `notifications` en el PostgreSQL local (usuario `notifications`, que no puede entrar a la de accounts); esquema con Flyway.
+- Si Kafka todavía no arrancó, el servicio queda sano igual (la readiness solo incluye la base) y el consumidor reintenta solo: los eventos esperan en el topic.
+- Por ahora deja cada transferencia en el log, con los números de cuenta enmascarados. El correo llega en BANK-72.
+- Variables: `KAFKA_BOOTSTRAP_SERVERS` (por defecto `localhost:9094`) y `DB_HOST`, `DB_PORT`, `DB_NAME`, `DB_USERNAME`, `DB_PASSWORD`.
+- Ver el avance del grupo (lag = eventos que le faltan leer):
+
+```bash
+docker exec bank-kafka /opt/kafka/bin/kafka-consumer-groups.sh --bootstrap-server kafka:9092 \
+  --describe --group notifications-service
+```
 
 ### Pruebas
 ```bash

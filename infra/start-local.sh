@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Levanta el entorno local en orden y espera a que cada pieza esté sana (BANK-49):
 #   Docker (Redis, PostgreSQL, Keycloak, Kafka y Mailpit) → config-server → discovery-server → customers-service
-#   → accounts-service → api-gateway
+#   → accounts-service → notifications-service → api-gateway
 # Uso: infra/start-local.sh          Apagar: infra/stop-local.sh [--all]
 set -euo pipefail
 
@@ -84,6 +84,7 @@ start config-server 8888 /actuator/health
 start discovery-server 8761 /actuator/health
 start customers-service 8081 /actuator/health/liveness
 start accounts-service 8082 /actuator/health/readiness
+start notifications-service 8083 /actuator/health/readiness
 start api-gateway 8080 /actuator/health/liveness
 
 # El gateway enruta cuando ya tiene la lista de Eureka (~20-30 s): se prueba con el asesor local
@@ -113,6 +114,7 @@ cat <<EOF
 ✅ Entorno local listo
    API (gateway)   http://localhost:8080/api/customers/...  /api/accounts/...  /api/transfers
    Swagger         http://localhost:8081/swagger-ui.html  ·  http://localhost:8082/swagger-ui.html
+   Avisos          notifications-service :8083 (sin API; consume bank.transfers.v1)
    Eureka          http://localhost:8761
    Config          http://localhost:8888/customers-service/default
    Keycloak        http://localhost:8180/admin  (admin / admin)

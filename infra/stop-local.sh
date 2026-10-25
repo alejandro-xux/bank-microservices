@@ -7,14 +7,14 @@ set -uo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 
 # Primero la puerta de entrada (gateway), al final la infraestructura base
-for app in ApiGatewayApplication AccountsServiceApplication CustomersServiceApplication DiscoveryServerApplication ConfigServerApplication; do
+for app in ApiGatewayApplication NotificationsServiceApplication AccountsServiceApplication CustomersServiceApplication DiscoveryServerApplication ConfigServerApplication; do
   if pkill -f "$app"; then
     echo "• $app detenido"
   fi
 done
 
 # Espera a que los puertos queden libres (máx. 30 s)
-for port in 8080 8082 8081 8761 8888; do
+for port in 8080 8083 8082 8081 8761 8888; do
   waited=0
   while curl -s -o /dev/null "http://localhost:$port" && [ "$waited" -lt 30 ]; do
     sleep 1
