@@ -225,6 +225,8 @@ jobs:
       HADOLINT_SHA256: c7187db94eeeeca956519a6af171adc31453941a1e777961f6e680f697c8c507
       TRIVY_VERSION: 0.75.0
       TRIVY_SHA256: c6e65abddb348e25f10549df887045629cf28cc72453cd1c63acb717316b3f3f
+      # build-push-action sube por defecto un artifact .dockerbuild por imagen; el resumen del job ya alcanza
+      DOCKER_BUILD_RECORD_UPLOAD: "false"
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
