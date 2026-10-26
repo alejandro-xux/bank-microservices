@@ -34,3 +34,16 @@ bank:
       min-age: 10s
       review-after: 30m
       batch-size: 50
+  # Relay del outbox (BANK-102), con los mismos valores que accounts-service: cada 500 ms, lotes de 100; limpieza
+  # cada hora de lo publicado hace más de 7 días, de a 1000. Los timeouts del productor están en OutboxKafka
+  outbox:
+    batch-size: 100
+    relay:
+      every: 0.5s
+    cleanup:
+      every: 1h
+      retention: 7d
+      batch-size: 1000
+  # Kafka del compose por su puerta del host en bootRun; en contenedores llega KAFKA_BOOTSTRAP_SERVERS=kafka:9092
+  kafka:
+    bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:localhost:9094}

@@ -8,6 +8,9 @@ import com.alejandro.bank.accounts.domain.Transfer;
 import com.alejandro.bank.accounts.domain.TransferStatus;
 import com.alejandro.bank.accounts.exception.SameAccountException;
 import com.alejandro.bank.accounts.exception.TransferRejectedException;
+import com.alejandro.bank.accounts.outbox.OutboxStore;
+import com.alejandro.bank.accounts.outbox.TransferCompletedEvents;
+import com.alejandro.bank.accounts.outbox.TransferFailedEvents;
 import com.alejandro.bank.accounts.repository.AccountRepository;
 import com.alejandro.bank.accounts.repository.MovementRepository;
 import com.alejandro.bank.accounts.repository.TransferRepository;
@@ -34,6 +37,9 @@ public class TransferExecutor {
 
     @Inject
     MovementRepository movementRepository;
+
+    @Inject
+    OutboxStore outbox;
 
     // Lo que necesita el orquestador para el asiento: la transferencia y los números de las dos cuentas
     public record Started(Transfer transfer, String fromAccountNumber, String toAccountNumber) {
@@ -70,7 +76,7 @@ public class TransferExecutor {
 
     // T2 cuando el core registró el asiento: COMPLETED y crédito en el destino. false si ya estaba resuelta (otro
     // proceso ganó la transición): entonces no se mueve nada. REQUIRES_NEW: el recuperador la llama dentro de su
-    // transacción de coordinación, y cada T2 tiene que confirmarse sola. El evento al outbox llega en BANK-102
+    // transacción de coordinación, y cada T2 tiene que confirmarse sola
     @Transactional(Transactional.TxType.REQUIRES_NEW)
     public boolean complete(UUID transferId) {
         Instant now = Timestamps.now();
@@ -82,6 +88,9 @@ public class TransferExecutor {
         accounts.to().receiveSettled(transfer.getAmount());
         movementRepository.persist(Movement.credit(transfer.getToAccountId(), transfer.getAmount(),
                 accounts.to().getBalance(), transferId));
+        // El evento sale solo con la transferencia confirmada (Transactional Outbox, BANK-69), con las dos cuentas
+        // bloqueadas: así su seq respeta el orden de cada cuenta
+        outbox.save(TransferCompletedEvents.of(transfer, accounts.from(), accounts.to(), now));
         return true;
     }
 
@@ -98,6 +107,8 @@ public class TransferExecutor {
         accounts.from().receiveSettled(transfer.getAmount());
         movementRepository.persist(Movement.reversal(transfer.getFromAccountId(), transfer.getAmount(),
                 accounts.from().getBalance(), transferId));
+        // El aviso al que envía (BANK-80) sale solo si la compensación se confirma, igual que TransferCompleted
+        outbox.save(TransferFailedEvents.of(transfer, accounts.from(), reason, now));
         return true;
     }
 

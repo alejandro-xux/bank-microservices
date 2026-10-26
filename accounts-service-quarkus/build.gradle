@@ -38,6 +38,8 @@ dependencies {
     // El mainframe por HTTP (tramas de texto) y el recuperador de la SAGA cada 5 s
     implementation 'io.quarkus:quarkus-rest-client'
     implementation 'io.quarkus:quarkus-scheduler'
+    // El relay del outbox con el cliente de Kafka directo (D5), como el productor de accounts-service
+    implementation 'io.quarkus:quarkus-kafka-client'
     implementation 'io.quarkus:quarkus-smallrye-health'
     implementation 'io.quarkus:quarkus-spring-cloud-config-client'
 
@@ -52,6 +54,20 @@ dependencies {
     testImplementation 'io.quarkus:quarkus-flyway'
     testImplementation 'org.flywaydb:flyway-database-postgresql'
     testImplementation 'org.testcontainers:testcontainers-postgresql'
+    testImplementation 'org.testcontainers:testcontainers-kafka'
+}
+
+// Parches de seguridad que la BOM de Quarkus todavía no trae (Trivy, D7 de BANK-95): la misma versión que
+// platform-bom fija para los servicios Spring. enforcedPlatform gana a una restricción común; esto gana a los dos.
+// Se quita cuando la BOM de Quarkus traiga una versión igual o mayor
+configurations.configureEach {
+    resolutionStrategy.eachDependency { details ->
+        // HIGH CVE-2026-106451 en 1.11.1 (la compresión del cliente de Kafka)
+        if (details.requested.group == 'at.yawk.lz4' && details.requested.name == 'lz4-java') {
+            details.useVersion '1.11.4'
+            details.because 'CVE-2026-106451: la BOM de Quarkus 3.40.1 trae 1.11.1'
+        }
+    }
 }
 
 tasks.named('test') {

@@ -2,6 +2,7 @@ package com.alejandro.bank.accounts;
 
 import com.alejandro.bank.accounts.domain.AccountNumber;
 import com.alejandro.bank.accounts.service.TransferExecutor;
+import com.alejandro.bank.contracts.transfers.v1.TransferFailed;
 import io.quarkus.test.junit.QuarkusTest;
 import io.restassured.response.ValidatableResponse;
 import jakarta.inject.Inject;
@@ -25,7 +26,7 @@ import static org.hamcrest.Matchers.hasItem;
 import static org.hamcrest.Matchers.notNullValue;
 
 // La SAGA de una transferencia contra el mainframe emulado de verdad, los mismos casos que SagaIntegrationTest de
-// accounts-service (BANK-78), sin los eventos del outbox (llegan en BANK-102). Después de cada caso, la regla global
+// accounts-service (BANK-78) y sus eventos del outbox (BANK-80, BANK-102). Después de cada caso, la regla global
 // del spike BANK-74 (S10): saldos + pendientes = lo que había
 @QuarkusTest
 class SagaTest extends IntegrationTest {
@@ -67,12 +68,13 @@ class SagaTest extends IntegrationTest {
         assertThat(balance(luisPen)).isEqualTo("1100.00");
         assertThat(movementTypes(anaPen)).isEqualTo("DEBIT");
         assertThat(movementTypes(luisPen)).isEqualTo("CREDIT");
+        assertThat(events()).isEqualTo(1);
         given().header("Authorization", Tokens.customer(Tokens.ANA_OID)).when().get("/transfers/" + id)
                 .then().statusCode(200).body("status", equalTo("COMPLETED"));
     }
 
     @Test
-    void whenTheCoreRejectsItTheMoneyGoesBackWithAReversal() {
+    void whenTheCoreRejectsItTheMoneyGoesBackWithAReversal() throws Exception {
         UUID key = UUID.randomUUID();
         String transferId = transfer(key, "100.13")
                 .statusCode(422)
@@ -83,11 +85,20 @@ class SagaTest extends IntegrationTest {
                 .body("reason", equalTo("057"))
                 .extract().path("transferId");
 
-        // El débito no se borra: se compensa. El destino nunca recibió nada
+        // El débito no se borra: se compensa. El destino nunca recibió nada: no sale TransferCompleted, sale un
+        // TransferFailed para avisarle al que envía (BANK-80), en la misma transacción que la compensación
         assertThat(balance(anaPen)).isEqualTo("1000.00");
         assertThat(balance(luisPen)).isEqualTo("1000.00");
         assertThat(movementTypes(anaPen)).isEqualTo("DEBIT, REVERSAL");
         assertThat(movementTypes(luisPen)).isNull();
+        assertThat(queryString("select string_agg(event_type, ', ') from outbox")).isEqualTo("TransferFailed");
+        TransferFailed failed = TransferFailed.parseFrom(payload());
+        assertThat(failed.getTransferId()).isEqualTo(transferId);
+        assertThat(failed.getFromAccountNumber()).isEqualTo(anaPenNumber);
+        assertThat(failed.getFromCustomerId()).isEqualTo(FakeCustomers.ANA);
+        assertThat(failed.getAmount()).isEqualTo("100.13");
+        assertThat(failed.getReason()).isEqualTo("057");
+        assertThat(queryString("select message_key from outbox")).isEqualTo(anaPen.toString());
         assertThat(queryString("select status from transfer")).isEqualTo("FAILED");
         // La reversa muestra en el historial a qué cuenta iba el dinero
         given().header("Authorization", Tokens.customer(Tokens.ANA_OID)).when().get("/accounts/" + anaPen + "/movements")
@@ -95,6 +106,7 @@ class SagaTest extends IntegrationTest {
         // La clave no se libera: el reintento devuelve el mismo rechazo, sin mover dinero otra vez
         transfer(key, "100.13").statusCode(422).body("transferId", equalTo(transferId));
         assertThat(movementTypes(anaPen)).isEqualTo("DEBIT, REVERSAL");
+        assertThat(events()).isEqualTo(1);
     }
 
     @Test
@@ -112,6 +124,7 @@ class SagaTest extends IntegrationTest {
         assertThat(balance(anaPen)).isEqualTo("899.01");
         assertThat(balance(luisPen)).isEqualTo("1000.00");
         assertThat(movementTypes(anaPen)).isEqualTo("DEBIT");
+        assertThat(events()).isZero();
         given().header("Authorization", Tokens.admin()).when().get("/transfers/" + id)
                 .then().body("status", equalTo("PENDING"));
         // Un reintento devuelve el estado de ahora
@@ -144,6 +157,7 @@ class SagaTest extends IntegrationTest {
         assertThat(won).containsExactlyInAnyOrder(true, false);
         assertThat(balance(luisPen)).isEqualTo("1100.99");
         assertThat(movementTypes(luisPen)).isEqualTo("CREDIT");
+        assertThat(events()).isEqualTo(1);
     }
 
     @Test
@@ -167,6 +181,18 @@ class SagaTest extends IntegrationTest {
     // Los tipos de movimiento de la cuenta en orden ("DEBIT, REVERSAL"); null si no tiene
     private String movementTypes(UUID accountId) {
         return queryString("select string_agg(type, ', ' order by created_at, type) from movement where account_id = ?", accountId);
+    }
+
+    private int events() {
+        return Integer.parseInt(queryString("select count(*)::text from outbox"));
+    }
+
+    private byte[] payload() throws java.sql.SQLException {
+        try (var connection = dataSource.getConnection();
+             var result = connection.createStatement().executeQuery("select payload from outbox")) {
+            result.next();
+            return result.getBytes(1);
+        }
     }
 
     private static String masked(String number) {

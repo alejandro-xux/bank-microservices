@@ -1,5 +1,6 @@
 package com.alejandro.bank.accounts;
 
+import com.github.dockerjava.api.DockerClient;
 import io.agroal.api.AgroalDataSource;
 import io.quarkus.test.common.QuarkusTestResource;
 import jakarta.inject.Inject;
@@ -37,6 +38,15 @@ public abstract class IntegrationTest {
             client.send(HttpRequest.newBuilder(URI.create(AccountsTestResource.coreBankingUrl() + "/__estado/borrar"))
                     .POST(HttpRequest.BodyPublishers.noBody()).build(), HttpResponse.BodyHandlers.discarding());
         }
+    }
+
+    // Kafka de las pruebas, para pausarlo desde otro paquete (AccountsTestResource no es público)
+    protected static DockerClient kafkaDocker() {
+        return AccountsTestResource.KAFKA.getDockerClient();
+    }
+
+    protected static String kafkaContainerId() {
+        return AccountsTestResource.KAFKA.getContainerId();
     }
 
     protected void emptyBank() {
