@@ -74,7 +74,12 @@ jobs:
       # Lo que imprimió el binario que lanzó @QuarkusIntegrationTest: si no arrancó, el porqué está aquí y no en el reporte
       - name: Log del binario
         if: failure()
-        run: tail -n 80 ${{ matrix.service }}/build/quarkus.log || echo "sin build/quarkus.log"
+        working-directory: ${{ matrix.service }}
+        run: |
+          find . -name 'quarkus*.log' -not -path './.gradle/*' -exec sh -c 'echo "== $1"; tail -n 80 "$1"' _ {} \;
+          ls -l build/*-runner || true
+          # Arrancado a mano unos segundos: si el binario no llega a escuchar, su error de arranque queda aquí
+          timeout 5 ./build/*-runner -Dquarkus.spring-cloud-config.enabled=false 2>&1 | tail -n 40 || true
 
       - name: Reportes de pruebas
         if: failure()
