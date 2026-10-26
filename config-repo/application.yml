@@ -14,6 +14,14 @@ spring:
           # Roles del claim "roles" (CUSTOMER → ROLE_CUSTOMER), igual en Keycloak y en Entra (app roles)
           authorities-claim-name: roles
           authority-prefix: ROLE_
+  # Apagado ordenado (BANK-94): al recibir SIGTERM (docker stop, o AKS al mover un pod) el servicio deja de aceptar
+  # peticiones nuevas, termina las que están en curso y recién entonces se detienen el relay del outbox, el
+  # recuperador y los consumidores de Kafka. Cada fase tiene hasta 20 s; compose espera 30 s antes de matarlo
+  lifecycle:
+    timeout-per-shutdown-phase: 20s
+
+server:
+  shutdown: graceful
 
 # Todos los servicios se registran en Eureka con su spring.application.name (BANK-44).
 # En AKS (E12) Eureka se reemplaza por Services y DNS de Kubernetes.

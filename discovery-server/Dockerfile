@@ -31,8 +31,11 @@ COPY --from=build /extracted/snapshot-dependencies/ ./
 COPY --from=build /extracted/application/ ./
 USER 10001
 EXPOSE 8761
-# Docker y compose saben si el servicio está sano (en AKS lo hacen las probes)
+# Docker y compose saben si el servicio está listo para recibir tráfico: la readiness (en AKS, la readinessProbe)
 HEALTHCHECK --interval=10s --timeout=3s --start-period=60s --retries=3 \
-  CMD curl -fsS http://localhost:8761/actuator/health > /dev/null || exit 1
-# Sin -Xmx fijo: el heap es un porcentaje de la memoria del contenedor (BANK-94)
-ENTRYPOINT ["java", "-XX:MaxRAMPercentage=75", "-jar", "app.jar"]
+  CMD curl -fsS http://localhost:8761/actuator/health/readiness > /dev/null || exit 1
+# Sin -Xmx fijo: el heap es el 60 % del límite de memoria del contenedor. El resto es para lo que la JVM usa fuera
+# del heap (metaspace, hilos, buffers de Netty), unos 150-200 MB en estos servicios (BANK-94). Va en
+# JAVA_TOOL_OPTIONS y no en el ENTRYPOINT para poder cambiarlo al correr, sin reconstruir la imagen
+ENV JAVA_TOOL_OPTIONS="-XX:MaxRAMPercentage=60"
+ENTRYPOINT ["java", "-jar", "app.jar"]

@@ -56,6 +56,11 @@ El script revisa cada imagen y falla si algo no cumple: corre con el usuario `10
 
 Unos 100 MB de cada una son el JRE y Ubuntu, que se comparten: en un registro o un nodo se guardan una sola vez.
 
+**La JVM en el contenedor (BANK-94).**
+- **Memoria.** Cada servicio tiene un límite de memoria en compose (`mem_limit`: config 384 MB, discovery, gateway y notifications 512 MB, customers y accounts 768 MB). El heap es el 60 % de ese límite, por `JAVA_TOOL_OPTIONS` en la imagen, que se puede cambiar al correr. Medido con carga: entre 180 y 490 MB por servicio, sin ningún OOMKilled.
+- **Health check.** El `HEALTHCHECK` mira la readiness, que incluye la base o Cosmos según el servicio. La liveness no depende de nada externo.
+- **Apagado ordenado.** Con `server.shutdown: graceful`, un `docker stop` deja terminar las peticiones en curso. Compose le da 30 s antes de cortarlo.
+
 ### Datos de prueba (BANK-75)
 Si la base de accounts está vacía (primer arranque o después de `--all`), `start-local.sh` corre `infra/seed-local.sh`, que abre por la API, como un asesor, las cuentas con las que probamos:
 
