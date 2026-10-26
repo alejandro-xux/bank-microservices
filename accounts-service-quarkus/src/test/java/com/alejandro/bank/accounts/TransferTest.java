@@ -224,6 +224,21 @@ class TransferTest extends IntegrationTest {
     }
 
     @Test
+    void aBodyThatIsNotJsonIs400WithTheSameProblemAsSpring() {
+        // Hallazgo de la comparación de errores (BANK-103): Quarkus respondía 400 sin cuerpo
+        for (String body : List.of("{\"fromAccountId\":", "{", "no-json", "{\"amount\":}", "[1,2")) {
+            given().header("Authorization", Tokens.customer(Tokens.ANA_OID)).header("Idempotency-Key", UUID.randomUUID().toString())
+                    .contentType("application/json").body(body)
+                    .when().post("/transfers").then().statusCode(400)
+                    .contentType("application/problem+json")
+                    .body("title", equalTo("Solicitud mal formada"))
+                    .body("detail", equalTo("El cuerpo de la solicitud no es válido"))
+                    .body("instance", equalTo("/transfers"));
+        }
+        assertUnchanged();
+    }
+
+    @Test
     void idempotencyKeyIsRequiredAndMustBeAUuid() {
         String body = body(anaPen, luisPenNumber, "10.00");
         given().header("Authorization", Tokens.customer(Tokens.ANA_OID)).contentType("application/json").body(body)

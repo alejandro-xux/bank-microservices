@@ -36,4 +36,18 @@ Corre en cada PR, en el job `e2e`, y es parte de `ci-ok`: un PR que rompe un cam
 3. Espera las rutas del gateway, abre las cuentas de prueba y precalienta el camino accounts → customers. La primera llamada gRPC en frío pasa el deadline de 2 s.
 4. Corre estas mismas features.
 
+### Contra las dos versiones de accounts (BANK-103)
+El job corre dos veces, como matriz `accounts: [spring, quarkus]`. `ci-ok` exige las dos. En la variante Quarkus, el gateway manda `/api/accounts` y `/api/transfers` a `accounts-service-quarkus` (`ACCOUNTS_SERVICE_URI`). Las features son las mismas.
+
+Contra el entorno local en contenedores, con Quarkus detrás del gateway:
+
+```bash
+ACCOUNTS_SERVICE_URI=http://accounts-service-quarkus:8084 \
+  docker compose -f infra/docker-compose.yml --profile app up -d --no-build --no-deps api-gateway
+cd tests/e2e && ./gradlew test
+# y de vuelta a Spring: el mismo "up" sin la variable
+```
+
+En la CI basta con `E2E_ACCOUNTS=quarkus tests/e2e/run-ci.sh`. Para comparar los errores (ProblemDetail) de las dos versiones campo por campo, está `tests/parity/compare-errors.sh`.
+
 El resumen del job dice cuántos escenarios pasaron y cuál falló. Si falla, el artifact `e2e-logs` tiene el log de cada contenedor y el reporte de Karate.

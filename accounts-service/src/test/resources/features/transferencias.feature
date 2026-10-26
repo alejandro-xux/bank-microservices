@@ -1,6 +1,7 @@
 # language: es
 # Las reglas de una transferencia, escritas para leerlas sin saber Java (BANK-87). Cada escenario corre contra la API
-# real de accounts-service, con PostgreSQL, Kafka y el mainframe emulado de verdad. El mainframe decide por los
+# real de accounts-service, con PostgreSQL, Kafka y el mainframe emulado de verdad. Es el mismo archivo para las dos
+# versiones (BANK-103): accounts-service-quarkus lo toma de aquí con sus propios pasos. El mainframe decide por los
 # céntimos del monto: .13 lo rechaza y .99 responde tarde (pero lo registra). Después de cada escenario se comprueba
 # que el banco no creó ni perdió dinero: saldos + transferencias pendientes = lo que había al empezar
 
@@ -36,7 +37,8 @@ Característica: Transferir dinero entre cuentas
 
   Escenario: El core bancario rechaza la transferencia
     Cuando Ana transfiere S/ 104.13 a la cuenta de Luis
-    Entonces la transferencia queda "FAILED" con el motivo "057"
+    Entonces la transferencia se rechaza con 422 "Transferencia rechazada por el core bancario"
+    Y la transferencia queda "FAILED" con el motivo "057"
     Y la cuenta de Ana tiene S/ 1000.00
     Y la cuenta de Luis tiene S/ 1000.00
     Y la cuenta de Ana tiene los movimientos "DEBIT, REVERSAL"

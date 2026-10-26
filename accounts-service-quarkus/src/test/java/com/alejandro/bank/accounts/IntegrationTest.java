@@ -33,7 +33,7 @@ public abstract class IntegrationTest {
         forgetCoreBanking();
     }
 
-    protected static void forgetCoreBanking() throws IOException, InterruptedException {
+    public static void forgetCoreBanking() throws IOException, InterruptedException {
         try (HttpClient client = HttpClient.newHttpClient()) {
             client.send(HttpRequest.newBuilder(URI.create(AccountsTestResource.coreBankingUrl() + "/__estado/borrar"))
                     .POST(HttpRequest.BodyPublishers.noBody()).build(), HttpResponse.BodyHandlers.discarding());

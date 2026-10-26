@@ -55,6 +55,10 @@ dependencies {
     testImplementation 'org.flywaydb:flyway-database-postgresql'
     testImplementation 'org.testcontainers:testcontainers-postgresql'
     testImplementation 'org.testcontainers:testcontainers-kafka'
+    // Los escenarios de transferencias.feature (BANK-103) con la misma Cucumber que accounts-service. Sin la extensión
+    // de Quarkiverse (1.3.0, hecha para Quarkus 3.15 y Cucumber 7): el runtime de Cucumber corre dentro de un @QuarkusTest
+    testImplementation platform('io.cucumber:cucumber-bom:8.0.4')
+    testImplementation 'io.cucumber:cucumber-java'
 }
 
 // Parches de seguridad que la BOM de Quarkus todavía no trae (Trivy, D7 de BANK-95): la misma versión que
@@ -67,6 +71,14 @@ configurations.configureEach {
             details.useVersion '1.11.4'
             details.because 'CVE-2026-106451: la BOM de Quarkus 3.40.1 trae 1.11.1'
         }
+    }
+}
+
+// El MISMO transferencias.feature que accounts-service, no una copia (BANK-103): si un escenario cambia, cambia para
+// las dos versiones
+tasks.named('processTestResources', Copy) {
+    from('../accounts-service/src/test/resources/features') {
+        into 'features'
     }
 }
 
