@@ -1,6 +1,5 @@
 package com.alejandro.bank.accounts.outbox;
 
-import io.quarkus.test.junit.QuarkusTest;
 import org.junit.jupiter.api.Test;
 
 import java.util.UUID;
@@ -8,9 +7,8 @@ import java.util.UUID;
 import static org.assertj.core.api.Assertions.assertThat;
 
 // BANK-84 (hallazgo de SonarCloud): un mensaje del outbox se compara por el contenido del evento, no por la referencia
-// del arreglo, y su toString no muestra los bytes del evento. @QuarkusTest aunque no use la aplicación: quarkus-jacoco
-// solo cuenta la cobertura del código que corre dentro de ella
-@QuarkusTest
+// del arreglo, y su toString no muestra los bytes del evento. Prueba unitaria simple: su cobertura la mide el agente de
+// Gradle y se suma al reporte de quarkus-jacoco (BANK-106)
 class OutboxMessageTest {
 
     private static final UUID ID = UUID.fromString("5d0f4f5e-3c1b-4a7e-9a10-2b8c7d6e5f40");

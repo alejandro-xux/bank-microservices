@@ -18,9 +18,24 @@ repositories {
     mavenCentral()
 }
 
-// Solo la tarea de las rutas para Sonar: la cobertura la mide quarkus-jacoco (el plugin jacoco de Gradle no coincide
-// con las clases que Quarkus transforma al arrancar)
+// Solo la tarea de las rutas para Sonar; la cobertura no usa gradle/quality.gradle (BANK-106)
 apply from: '../gradle/sonar-libraries.gradle'
+
+// Cobertura combinada (BANK-106). quarkus-jacoco mide lo que corre dentro de la aplicación de @QuarkusTest y escribe el
+// único XML que lee Sonar. El agente de Gradle mide las pruebas unitarias simples (dominio, códec de tramas) en el mismo
+// archivo de datos, que quarkus-jacoco reutiliza (quarkus.jacoco.reuse-data-file). El classloader de Quarkus queda fuera
+// del agente: esas clases ya las instrumenta quarkus-jacoco, y medirlas dos veces daría clases que no coinciden
+apply plugin: 'jacoco'
+tasks.named('test') {
+    jacoco {
+        excludeClassLoaders = ['*QuarkusClassLoader']
+        destinationFile = layout.buildDirectory.file('jacoco-quarkus.exec').get().asFile
+    }
+}
+// El XML lo genera quarkus-jacoco; el reporte de Gradle sobre las clases sin transformar no coincidiría
+tasks.named('jacocoTestReport') {
+    enabled = false
+}
 
 dependencies {
     // Quarkus 3.40.1 (LTS, spike BANK-98). Enforced: sus versiones mandan sobre cualquier otra que llegue por contracts
