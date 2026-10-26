@@ -16,7 +16,6 @@ import org.apache.kafka.common.serialization.ByteArraySerializer;
 import org.apache.kafka.common.serialization.StringDeserializer;
 import org.apache.kafka.common.serialization.StringSerializer;
 import org.junit.jupiter.api.AfterAll;
-import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
 import java.nio.charset.StandardCharsets;
@@ -46,17 +45,12 @@ public class TransferEventsTest {
 
     private static KafkaProducer<String, byte[]> producer;
 
-    @BeforeAll
-    static void producer() {
-        producer = new KafkaProducer<>(Map.of(
-                ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, FraudTestResource.kafkaBootstrapServers(),
-                ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, StringSerializer.class,
-                ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, ByteArraySerializer.class));
-    }
-
     @AfterAll
     static void closeProducer() {
-        producer.close();
+        if (producer != null) {
+            producer.close();
+            producer = null;
+        }
     }
 
     @Test
@@ -109,7 +103,7 @@ public class TransferEventsTest {
         TransferCompleted event = completed();
         TransferCompleted next = completed();
 
-        producer.send(new ProducerRecord<>(TransferTopics.TOPIC, event.getTransferId(), event.toByteArray())).get();
+        producer().send(new ProducerRecord<>(TransferTopics.TOPIC, event.getTransferId(), event.toByteArray())).get();
         publish(event.getTransferId(), TransferTopics.TRANSFER_COMPLETED, next.toByteArray());
 
         await().atMost(WAIT).until(() -> summary(next.getEventId()).isPresent());
@@ -146,7 +140,18 @@ public class TransferEventsTest {
     private static void publish(String key, String type, byte[] value) throws Exception {
         ProducerRecord<String, byte[]> message = new ProducerRecord<>(TransferTopics.TOPIC, key, value);
         message.headers().add(TransferTopics.HEADER_EVENT_TYPE, type.getBytes(StandardCharsets.UTF_8));
-        producer.send(message).get();
+        producer().send(message).get();
+    }
+
+    // Se crea al primer uso y no en un @BeforeAll: así no depende de si Quarkus ya levantó los contenedores
+    private static KafkaProducer<String, byte[]> producer() {
+        if (producer == null) {
+            producer = new KafkaProducer<>(Map.of(
+                    ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, FraudTestResource.kafkaBootstrapServers(),
+                    ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, StringSerializer.class,
+                    ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, ByteArraySerializer.class));
+        }
+        return producer;
     }
 
     private static Optional<String> summary(String eventId) throws SQLException {

@@ -36,7 +36,10 @@ public class FraudTestResource implements QuarkusTestResourceLifecycleManager {
         POSTGRES.start();
         KAFKA.start();
         createTopics();
+        // Estas propiedades le llegan a @QuarkusTest y también al binario que lanza @QuarkusIntegrationTest, que corre
+        // con el perfil prod: por eso el config-server se apaga aquí y no con %test
         return Map.of(
+                "quarkus.spring-cloud-config.enabled", "false",
                 "quarkus.datasource.jdbc.url", POSTGRES.getJdbcUrl(),
                 "quarkus.datasource.username", POSTGRES.getUsername(),
                 "quarkus.datasource.password", POSTGRES.getPassword(),
