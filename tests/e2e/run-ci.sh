@@ -2,8 +2,17 @@
 # La prueba de punta a punta en la CI (BANK-96): el sistema completo en contenedores, con el emulador de Cosmos en vez
 # del Cosmos real (infra/docker-compose.ci.yml), y Karate contra el gateway. Espera las imágenes ya construidas
 # (bank-<servicio>:local). Termina con el resultado de Karate; la CI guarda los logs si falla.
-# Uso: tests/e2e/run-ci.sh        (desde la raíz del repo, con los puertos 8080, 8180, 8025 y 8081 libres)
+# Uso: tests/e2e/run-ci.sh                      (desde la raíz del repo, con los puertos 8080, 8180, 8025 y 8081 libres)
+#      E2E_ACCOUNTS=quarkus tests/e2e/run-ci.sh   la misma prueba con accounts-service-quarkus detrás del gateway
+#                                                 (BANK-103); por defecto, spring
 set -euo pipefail
+
+# Qué versión de accounts atiende /api/accounts y /api/transfers: el gateway la toma de ACCOUNTS_SERVICE_URI
+case "${E2E_ACCOUNTS:-spring}" in
+  spring) ;;
+  quarkus) export ACCOUNTS_SERVICE_URI=http://accounts-service-quarkus:8084 ;;
+  *) echo "✗ E2E_ACCOUNTS debe ser spring o quarkus, no ${E2E_ACCOUNTS}" >&2; exit 2 ;;
+esac
 
 ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
 COMPOSE=(docker compose -f "$ROOT/infra/docker-compose.yml" -f "$ROOT/infra/docker-compose.ci.yml" --profile app)
@@ -39,7 +48,7 @@ python3 -I "$ROOT/infra/cosmos-emulator/init.py"
 step "Sistema completo (imágenes ya construidas)"
 "${COMPOSE[@]}" up -d --no-build --wait --wait-timeout 400
 
-step "Rutas del gateway"
+step "Rutas del gateway (accounts: ${E2E_ACCOUNTS:-spring})"
 ADMIN=$(token asesor asesor-local)
 # Un id que no existe responde 404 desde el servicio: el gateway ya lo encontró en Eureka
 wait_status "$GATEWAY/api/customers/no-existe" "$ADMIN" 404 120

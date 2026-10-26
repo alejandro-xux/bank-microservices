@@ -16,6 +16,7 @@ import com.fasterxml.jackson.databind.exc.MismatchedInputException;
 import io.quarkus.hibernate.validator.runtime.jaxrs.ResteasyReactiveViolationException;
 import jakarta.validation.ConstraintViolation;
 import jakarta.validation.Path;
+import jakarta.ws.rs.WebApplicationException;
 import jakarta.ws.rs.core.Response;
 import jakarta.ws.rs.core.UriInfo;
 import org.jboss.resteasy.reactive.server.ServerExceptionMapper;
@@ -53,6 +54,18 @@ public class ErrorMappers {
     @ServerExceptionMapper({JsonProcessingException.class, MismatchedInputException.class})
     public Response badJson(UriInfo uri) {
         return Problems.of(400, "Solicitud mal formada", "El cuerpo de la solicitud no es válido", uri).build();
+    }
+
+    // 400 igual al anterior cuando el cuerpo ni siquiera es JSON ("{", "no-json"): el lector de Jackson de Quarkus REST
+    // no deja pasar ese error, lo envuelve en un WebApplicationException 400 SIN cuerpo (comparación de errores,
+    // BANK-103). Cualquier otro WebApplicationException (ruta inexistente, método no permitido...) sigue como lo arma
+    // Quarkus
+    @ServerExceptionMapper
+    public Response webApplication(WebApplicationException ex, UriInfo uri) {
+        if (ex.getCause() instanceof JsonProcessingException) {
+            return badJson(uri);
+        }
+        return ex.getResponse();
     }
 
     @ServerExceptionMapper

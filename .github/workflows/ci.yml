@@ -272,10 +272,15 @@ jobs:
   # Prueba de punta a punta (BANK-96): el sistema completo en contenedores, con el emulador de Cosmos (sin secretos,
   # también en PRs de forks), y Karate contra el gateway: login real, transferencias, el mainframe emulado y los
   # correos. Corre en paralelo con lo demás; las imágenes salen de la misma caché que el job images
+  # La misma E2E contra las dos versiones de accounts (BANK-103): ci-ok exige las dos variantes de la matriz
   e2e:
-    name: e2e
+    name: e2e (${{ matrix.accounts }})
     runs-on: ubuntu-latest
     timeout-minutes: 25
+    strategy:
+      fail-fast: false
+      matrix:
+        accounts: [spring, quarkus]
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
@@ -301,6 +306,8 @@ jobs:
           done
 
       - name: Prueba de punta a punta
+        env:
+          E2E_ACCOUNTS: ${{ matrix.accounts }}
         run: tests/e2e/run-ci.sh
 
       - name: Resumen
@@ -310,10 +317,10 @@ jobs:
           import json, pathlib
           summary = pathlib.Path("tests/e2e/build/karate-reports/karate-summary-json.txt")
           if not summary.exists():
-              print("### E2E\n\nKarate no llegó a correr: ver el paso anterior y los logs de los contenedores (artifact e2e-logs)")
+              print("### E2E (accounts: ${{ matrix.accounts }})\n\nKarate no llegó a correr: ver el paso anterior y los logs de los contenedores (artifact e2e-logs)")
               raise SystemExit
           data = json.loads(summary.read_text())
-          print(f"### E2E: {data['scenariosPassed']} escenarios pasaron, {data['scenariosfailed']} fallaron "
+          print(f"### E2E (accounts: ${{ matrix.accounts }}): {data['scenariosPassed']} escenarios pasaron, {data['scenariosfailed']} fallaron "
                 f"({data['elapsedTime'] / 1000:.1f} s)\n")
           for report in pathlib.Path("tests/e2e/build/karate-reports").glob("*.karate-json.txt"):
               for scenario in json.loads(report.read_text()).get("scenarioResults", []):
@@ -334,7 +341,7 @@ jobs:
         if: failure()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
-          name: e2e-logs
+          name: e2e-logs-${{ matrix.accounts }}
           path: e2e-logs
           retention-days: 7
 

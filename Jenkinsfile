@@ -51,7 +51,7 @@ pipeline {
                         post {
                             always {
                                 // Jenkins lee los mismos XML que el resumen de GitHub: pruebas, fallos y cuáles
-                                junit testResults: "${MODULE}/build/test-results/test/*.xml", allowEmptyResults: false
+                                junit testResults: "${MODULE}/build/test-results/**/*.xml", allowEmptyResults: false
                                 recordCoverage(tools: [[parser: 'JACOCO', pattern: "${MODULE}/build/reports/jacoco/test/jacoco*.xml"]],
                                         id: "jacoco-${MODULE}", name: "Cobertura ${MODULE}", skipPublishingChecks: true)
                             }
