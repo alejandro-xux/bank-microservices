@@ -18,15 +18,34 @@ trap 'rm -rf "$reports"' EXIT
 
 trivy() {
   if [ -n "${TRIVY_BIN:-}" ]; then
-    "$TRIVY_BIN" image --quiet --format json --ignorefile "$ROOT/.trivyignore" "$@"
+    "$TRIVY_BIN" "$@"
   else
     docker run --rm -v /var/run/docker.sock:/var/run/docker.sock -v bank-trivy-cache:/root/.cache \
-      -v "$ROOT/.trivyignore:/.trivyignore:ro" "$TRIVY_IMAGE" image --quiet --format json --ignorefile /.trivyignore "$@"
+      -v "$ROOT/.trivyignore:/.trivyignore:ro" "$TRIVY_IMAGE" "$@"
   fi
 }
+ignorefile() { if [ -n "${TRIVY_BIN:-}" ]; then echo "$ROOT/.trivyignore"; else echo /.trivyignore; fi; }
+
+# Las bases de vulnerabilidades se bajan primero, probando cada espejo. Trivy cambia de espejo solo si el primero falla
+# antes de empezar; si se corta a mitad de la descarga (pasó en la CI con mirror.gcr.io: 404 en una capa), falla sin
+# probar el otro. Así un espejo caído no tumba la CI, y después se revisa sin volver a bajar nada
+download() {
+  local kind=$1; shift
+  for repository in "$@"; do
+    if trivy image --quiet "--download-$kind-only" "--$kind-repository" "$repository" > /dev/null 2>&1; then
+      return 0
+    fi
+    echo "• no se pudo bajar la base $kind de $repository; pruebo el siguiente espejo" >&2
+  done
+  echo "✗ no se pudo bajar la base $kind de ningún espejo" >&2
+  exit 1
+}
+download db mirror.gcr.io/aquasec/trivy-db:2 ghcr.io/aquasecurity/trivy-db:2
+download java-db mirror.gcr.io/aquasec/trivy-java-db:1 ghcr.io/aquasecurity/trivy-java-db:1
 
 for image in "${images[@]}"; do
-  trivy "$image" > "$reports/$(echo "$image" | tr '/:' '__').json"
+  trivy image --quiet --skip-db-update --skip-java-db-update --format json --ignorefile "$(ignorefile)" "$image" \
+    > "$reports/$(echo "$image" | tr '/:' '__').json"
 done
 
 python3 -I - "$reports" <<'EOF'
