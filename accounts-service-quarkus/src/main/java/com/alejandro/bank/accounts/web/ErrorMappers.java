@@ -108,7 +108,7 @@ public class ErrorMappers {
     @ServerExceptionMapper
     @SuppressWarnings("unchecked")
     public Response transferFailed(TransferFailedException ex, UriInfo uri) {
-        Response response = Problems.of(422, "Transferencia rechazada por el core bancario", ex.getMessage(), uri).build();
+        Response response = Problems.of(400, "Transferencia rechazada por el core bancario" /* PRUEBA INVERSA */, ex.getMessage(), uri).build();
         Map<String, Object> body = (Map<String, Object>) response.getEntity();
         body.put("transferId", ex.getTransfer().getId());
         body.put("transferStatus", ex.getTransfer().getStatus());
