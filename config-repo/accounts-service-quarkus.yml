@@ -1,0 +1,22 @@
+# accounts-service-quarkus (E14, BANK-99): los mismos valores y variables que accounts-service.yml, con los nombres de
+# propiedad de Quarkus. Lo que se fija al compilar está en su application.properties
+quarkus:
+  datasource:
+    username: ${DB_USERNAME:accounts}
+    password: ${DB_PASSWORD:accounts-local}
+    jdbc:
+      url: jdbc:postgresql://${DB_HOST:localhost}:${DB_PORT:5433}/${DB_NAME:accounts}
+  oidc:
+    # El emisor que dicen los tokens y las claves por separado, sin el descubrimiento de Keycloak: dentro de Docker
+    # devolvería direcciones con localhost:8180 (spike BANK-98, la misma idea que KC_HOSTNAME en BANK-93)
+    auth-server-url: ${AUTH_ISSUER_URI:http://localhost:8180/realms/bank}
+    discovery-enabled: false
+    jwks-path: ${AUTH_JWKS_URI:http://localhost:8180/realms/bank/protocol/openid-connect/certs}
+    token:
+      issuer: ${AUTH_ISSUER_URI:http://localhost:8180/realms/bank}
+      audience: ${AUTH_AUDIENCE:bank-api}
+  grpc:
+    clients:
+      customers:
+        host: ${CUSTOMERS_GRPC_HOST:localhost}
+        port: ${CUSTOMERS_GRPC_PORT:9091}

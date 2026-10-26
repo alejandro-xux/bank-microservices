@@ -9,6 +9,7 @@
 !discovery-server
 !customers-service
 !accounts-service
+!accounts-service-quarkus
 !notifications-service
 !api-gateway
 **/build

@@ -34,8 +34,8 @@ pipeline {
                 axes {
                     axis {
                         name 'MODULE'
-                        values 'contracts', 'customers-service', 'accounts-service', 'notifications-service',
-                                'api-gateway', 'config-server', 'discovery-server'
+                        values 'contracts', 'customers-service', 'accounts-service', 'accounts-service-quarkus',
+                                'notifications-service', 'api-gateway', 'config-server', 'discovery-server'
                     }
                 }
                 stages {
@@ -52,13 +52,13 @@ pipeline {
                             always {
                                 // Jenkins lee los mismos XML que el resumen de GitHub: pruebas, fallos y cuáles
                                 junit testResults: "${MODULE}/build/test-results/test/*.xml", allowEmptyResults: false
-                                recordCoverage(tools: [[parser: 'JACOCO', pattern: "${MODULE}/build/reports/jacoco/test/jacocoTestReport.xml"]],
+                                recordCoverage(tools: [[parser: 'JACOCO', pattern: "${MODULE}/build/reports/jacoco/test/jacoco*.xml"]],
                                         id: "jacoco-${MODULE}", name: "Cobertura ${MODULE}", skipPublishingChecks: true)
                             }
                             success {
                                 // Lo que necesita el análisis único de Sonar (como el artifact sonar-<módulo> de GitHub)
                                 stash name: "sonar-${MODULE}", allowEmpty: true, includes:
-                                        "${MODULE}/build/classes/java/main/**,${MODULE}/build/classes/java/test/**,${MODULE}/build/reports/jacoco/test/jacocoTestReport.xml"
+                                        "${MODULE}/build/classes/java/main/**,${MODULE}/build/classes/java/test/**,${MODULE}/build/reports/jacoco/test/jacoco*.xml"
                             }
                         }
                     }
@@ -131,7 +131,7 @@ pipeline {
                     axis {
                         name 'SERVICE'
                         values 'config-server', 'discovery-server', 'customers-service', 'accounts-service',
-                                'notifications-service', 'api-gateway'
+                                'accounts-service-quarkus', 'notifications-service', 'api-gateway'
                     }
                 }
                 stages {
@@ -178,8 +178,8 @@ pipeline {
             agent any
             steps {
                 script {
-                    ['contracts', 'customers-service', 'accounts-service', 'notifications-service', 'api-gateway',
-                     'config-server', 'discovery-server'].each { m -> unstash "sonar-${m}" }
+                    ['contracts', 'customers-service', 'accounts-service', 'accounts-service-quarkus', 'notifications-service',
+                     'api-gateway', 'config-server', 'discovery-server'].each { m -> unstash "sonar-${m}" }
                 }
                 withCredentials([string(credentialsId: 'sonar-token', variable: 'SONAR_TOKEN')]) {
                     sh '''
@@ -195,7 +195,7 @@ pipeline {
 
                         # En GitHub las clases llegan a sonar-inputs/<artifact>/; aquí el stash las deja en su módulo
                         sed -i 's|sonar-inputs/sonar-\\([a-z-]*\\)/|\\1/build/|' sonar-project.properties
-                        modules="contracts customers-service accounts-service notifications-service api-gateway config-server discovery-server"
+                        modules="contracts customers-service accounts-service accounts-service-quarkus notifications-service api-gateway config-server discovery-server"
                         for m in $modules; do (cd "$m" && ./gradlew -q sonarLibraries --no-daemon); done
                         join() { for m in $modules; do tr ',' '\\n' < "$m/build/sonar/$1"; echo; done | grep . | sort -u | paste -sd, -; }
                         echo "sonar.java.libraries=$(join libraries.txt)" >> sonar-project.properties

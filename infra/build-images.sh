@@ -7,7 +7,7 @@
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
-SERVICES=(config-server discovery-server customers-service accounts-service notifications-service api-gateway)
+SERVICES=(config-server discovery-server customers-service accounts-service accounts-service-quarkus notifications-service api-gateway)
 UID_EXPECTED=10001
 # Nombres que no pueden aparecer con un valor dentro de una imagen: las credenciales llegan al correr, por variables
 SECRET_PATTERN='COSMOS_KEY|COSMOS_ENDPOINT|CLIENT_SECRET|PASSWORD|SONAR_TOKEN|AccountKey='

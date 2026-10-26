@@ -11,7 +11,7 @@ ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 TRIVY_IMAGE=aquasec/trivy:0.75.0
 images=("$@")
 [ ${#images[@]} -eq 0 ] && images=(bank-config-server:local bank-discovery-server:local bank-customers-service:local
-  bank-accounts-service:local bank-notifications-service:local bank-api-gateway:local)
+  bank-accounts-service:local bank-accounts-service-quarkus:local bank-notifications-service:local bank-api-gateway:local)
 
 reports=$(mktemp -d)
 trap 'rm -rf "$reports"' EXIT
