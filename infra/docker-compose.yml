@@ -258,9 +258,12 @@ services:
     mem_limit: 512m
     environment:
       <<: *entorno
-      # A qué versión de accounts van /api/accounts y /api/transfers (BANK-103). Por defecto la de Spring, por Eureka;
-      # la E2E de la variante Quarkus pasa ACCOUNTS_SERVICE_URI=http://accounts-service-quarkus:8084 (tests/e2e/run-ci.sh)
-      ACCOUNTS_SERVICE_URI: ${ACCOUNTS_SERVICE_URI:-lb://accounts-service}
+      # Canary de accounts (BANK-104): la versión Quarkus por la red interna y los pesos de arranque, por defecto
+      # 100/0. Durante un cambio de versión los pesos se mueven en config-repo/api-gateway.yml + /actuator/refresh, que
+      # ganan a estas variables (runbook en el README); la E2E de la variante Quarkus arranca con 0/100 (run-ci.sh)
+      ACCOUNTS_QUARKUS_URI: http://accounts-service-quarkus:8084
+      ACCOUNTS_SPRING_WEIGHT: ${ACCOUNTS_SPRING_WEIGHT:-100}
+      ACCOUNTS_QUARKUS_WEIGHT: ${ACCOUNTS_QUARKUS_WEIGHT:-0}
     ports:
       - "8080:8080"
     depends_on:
