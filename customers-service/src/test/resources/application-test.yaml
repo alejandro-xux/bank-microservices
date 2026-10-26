@@ -9,6 +9,12 @@ spring:
       cosmos:
         enabled: false
 
+# La readiness de config-repo incluye "cosmos" (BANK-94), que no existe con Cosmos apagado: sin esto Spring no arranca
+management:
+  endpoint:
+    health:
+      validate-group-membership: false
+
 # Las pruebas no se registran en Eureka (no necesitan el discovery-server)
 eureka:
   client:

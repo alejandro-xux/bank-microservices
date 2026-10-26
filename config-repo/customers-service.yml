@@ -35,3 +35,8 @@ management:
       show-components: always
       probes:
         enabled: true
+      group:
+        # La readiness incluye Cosmos (sin él no hay clientes que servir). Redis no: es una caché y si falla se
+        # lee de Cosmos (BANK-31). La liveness no mira nada externo: un Cosmos caído no debe reiniciar el servicio
+        readiness:
+          include: readinessState,cosmos

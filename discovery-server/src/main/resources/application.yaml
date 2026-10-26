@@ -1,9 +1,13 @@
 # Independiente del config-server: es infraestructura base y debe poder arrancar sola (BANK-44)
 spring:
+  lifecycle:
+    timeout-per-shutdown-phase: 20s
   application:
     name: discovery-server
 
 server:
+  # Apagado ordenado, igual que los servicios que leen config-repo/application.yml (BANK-94)
+  shutdown: graceful
   port: 8761
 
 eureka:
@@ -21,3 +25,8 @@ management:
     web:
       exposure:
         include: health,info
+  endpoint:
+    health:
+      # /actuator/health/liveness y /readiness, como los demás (BANK-94): las usan el HEALTHCHECK y AKS
+      probes:
+        enabled: true

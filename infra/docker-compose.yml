@@ -7,6 +7,9 @@ name: bank-microservices
 x-servicio: &servicio
   profiles: [app]
   restart: "no"
+  # docker stop manda SIGTERM y, si el proceso no terminó, SIGKILL a los 10 s. El apagado ordenado tiene hasta 20 s
+  # por fase (config-repo/application.yml, BANK-94): se le dan 30 s para que nunca lo corten a la mitad
+  stop_grace_period: 30s
   environment: &entorno
     CONFIG_SERVER_URL: http://config-server:8888
     EUREKA_URL: http://discovery-server:8761/eureka
@@ -166,6 +169,9 @@ services:
     build: {context: .., dockerfile: config-server/Dockerfile}
     image: bank-config-server:local
     container_name: bank-config-server
+    # Límite de memoria de cada servicio (BANK-94), con margen sobre lo medido en reposo y con carga (documento,
+    # "La JVM en el contenedor"). El heap es el 60 % de este límite (JAVA_TOOL_OPTIONS en el Dockerfile)
+    mem_limit: 384m
     environment:
       CONFIG_REPO: /config-repo
     volumes:
@@ -176,6 +182,7 @@ services:
     build: {context: .., dockerfile: discovery-server/Dockerfile}
     image: bank-discovery-server:local
     container_name: bank-discovery-server
+    mem_limit: 512m
     ports:
       - "8761:8761"
 
@@ -184,6 +191,7 @@ services:
     build: {context: .., dockerfile: customers-service/Dockerfile}
     image: bank-customers-service:local
     container_name: bank-customers-service
+    mem_limit: 768m
     # COSMOS_ENDPOINT y COSMOS_KEY: solo desde el archivo fuera del repo (el mismo que usa start-local.sh)
     env_file:
       - path: ${BANK_ENV_FILE:-${HOME}/.bank-microservices.env}
@@ -199,6 +207,7 @@ services:
     build: {context: .., dockerfile: accounts-service/Dockerfile}
     image: bank-accounts-service:local
     container_name: bank-accounts-service
+    mem_limit: 768m
     depends_on:
       <<: *base
       postgres: {condition: service_healthy}
@@ -211,6 +220,7 @@ services:
     build: {context: .., dockerfile: notifications-service/Dockerfile}
     image: bank-notifications-service:local
     container_name: bank-notifications-service
+    mem_limit: 512m
     depends_on:
       <<: *base
       postgres: {condition: service_healthy}
@@ -223,6 +233,7 @@ services:
     build: {context: .., dockerfile: api-gateway/Dockerfile}
     image: bank-api-gateway:local
     container_name: bank-api-gateway
+    mem_limit: 512m
     ports:
       - "8080:8080"
     depends_on:
