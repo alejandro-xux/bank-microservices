@@ -7,7 +7,7 @@
 set -uo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
-COMPOSE=(docker compose -f "$ROOT/infra/docker-compose.yml" --profile app)
+COMPOSE=(docker compose -f "$ROOT/infra/docker-compose.yml" --profile app --profile native)
 ALL=false
 CONTAINERS=false
 for arg in "$@"; do
@@ -34,12 +34,13 @@ for port in 8080 8083 8082 8081 8761 8888; do
 done
 
 if $ALL; then
-  # Con el perfil app, down también se lleva los servicios en contenedores (sin él los dejaría corriendo)
+  # Con los perfiles app y native, down también se lleva los servicios en contenedores (sin él los dejaría corriendo)
   "${COMPOSE[@]}" down > /dev/null 2>&1
   echo "• servicios en contenedores, Redis, PostgreSQL, Keycloak, Kafka, Mailpit y el mainframe emulado detenidos"
 elif $CONTAINERS; then
-  # Solo los 7 servicios (con accounts-service-quarkus, BANK-104): la infraestructura (y sus datos) sigue corriendo
-  "${COMPOSE[@]}" rm --stop --force api-gateway notifications-service accounts-service-quarkus accounts-service \
+  # Solo los 8 servicios (con accounts-service-quarkus, BANK-104, y fraud-service, BANK-107): la infraestructura (y
+  # sus datos) sigue corriendo
+  "${COMPOSE[@]}" rm --stop --force api-gateway fraud-service notifications-service accounts-service-quarkus accounts-service \
     customers-service discovery-server config-server > /dev/null 2>&1
   echo "• servicios en contenedores detenidos (la infraestructura sigue corriendo)"
 fi

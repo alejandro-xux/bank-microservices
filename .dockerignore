@@ -11,6 +11,7 @@
 !accounts-service
 !accounts-service-quarkus
 !notifications-service
+!fraud-service
 !api-gateway
 **/build
 **/.gradle

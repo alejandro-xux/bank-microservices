@@ -18,5 +18,9 @@ create() {
 create bank.transfers.v1 3
 # Mensajes que nunca se van a poder procesar (BANK-73). Mismas particiones: el DLT conserva la del original
 create bank.transfers.v1.DLT 3
+# Transferencias sospechosas (fraud-service, BANK-107/108). Clave = cuenta origen, como bank.transfers.v1
+create bank.fraud.v1 3
+# Lo que fraud-service no pudo procesar de bank.transfers.v1: misma cantidad de particiones que el original
+create bank.fraud.v1.DLT 3
 
 "$TOPICS" --bootstrap-server "$BOOTSTRAP" --describe --topic 'bank\..*' | grep PartitionCount

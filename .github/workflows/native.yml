@@ -1,0 +1,136 @@
+# Imágenes nativas (E14, BANK-107; spike BANK-105 N5). Compilar con GraalVM/Mandrel tarda ~8 min y pide ~6 GB por
+# servicio: no va en cada PR (ci.yml), solo cuando cambia lo que entra en el binario, en main, cada noche (una
+# dependencia nueva puede romper el nativo sin tocar el código) y a mano. Por servicio, dos jobs en paralelo:
+# - las pruebas contra el binario (@QuarkusIntegrationTest de src/native-test): lo que en JVM anda por reflexión y en
+#   nativo solo si se registró al compilar se descubre aquí, no en producción
+# - la imagen, con las mismas revisiones que el job images de ci.yml (hadolint, usuario, HEALTHCHECK, credenciales, Trivy)
+name: native
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - fraud-service/**
+      - contracts/**
+      - platform-bom/**
+      - .github/workflows/native.yml
+  push:
+    branches: [main]
+    paths:
+      - fraud-service/**
+      - contracts/**
+      - platform-bom/**
+      - .github/workflows/native.yml
+  schedule:
+    - cron: '0 7 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: native-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+env:
+  # El mismo builder que el Dockerfile (Mandrel 25, la versión que pide Quarkus 3.40), fijado por digest
+  MANDREL_BUILDER: quay.io/quarkus/ubi9-quarkus-mandrel-builder-image:jdk-25@sha256:bfea64bfc6e86d4bbb8f301ac227a4da08e5778c8d3b93b1e10ef3c35d16e32c
+
+jobs:
+  native-tests:
+    name: nativo ${{ matrix.service }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    strategy:
+      fail-fast: false
+      matrix:
+        service: [fraud-service]
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - uses: actions/setup-java@b843ebf9b913146b38da2eaa7aeddf76074ae1ad # v6.1.0
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      - uses: gradle/actions/setup-gradle@3f5f9adaf7d9fecd50b5935e54106014257a94e6 # v6.4.0
+
+      # Compila el binario dentro del builder (container-build: el runner no necesita GraalVM) y corre contra él las
+      # pruebas de src/native-test, con PostgreSQL y Kafka de Testcontainers como en las pruebas de JVM
+      - name: Binario y pruebas contra el binario
+        working-directory: ${{ matrix.service }}
+        run: >-
+          ./gradlew testNative --no-daemon
+          -Dquarkus.native.container-build=true
+          -Dquarkus.native.builder-image="$MANDREL_BUILDER"
+          -Dquarkus.native.native-image-xmx=5g
+
+      - name: Resumen
+        if: always()
+        run: |
+          python3 -I .github/scripts/test-summary.py "${{ matrix.service }}" testNative >> "$GITHUB_STEP_SUMMARY"
+          ls -l ${{ matrix.service }}/build/*-runner 2>/dev/null | awk '{printf "Binario: %.0f MB\n", $5/1048576}' >> "$GITHUB_STEP_SUMMARY" || true
+
+      - name: Reportes de pruebas
+        if: failure()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: reportes-nativo-${{ matrix.service }}
+          path: ${{ matrix.service }}/build/reports/tests/
+          retention-days: 7
+
+  native-image:
+    name: imagen nativa ${{ matrix.service }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    strategy:
+      fail-fast: false
+      matrix:
+        service: [fraud-service]
+    env:
+      HADOLINT_VERSION: 2.15.1
+      HADOLINT_SHA256: c7187db94eeeeca956519a6af171adc31453941a1e777961f6e680f697c8c507
+      TRIVY_VERSION: 0.75.0
+      TRIVY_SHA256: c6e65abddb348e25f10549df887045629cf28cc72453cd1c63acb717316b3f3f
+      DOCKER_BUILD_RECORD_UPLOAD: "false"
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: hadolint
+        run: |
+          curl -sSfL -o "$RUNNER_TEMP/hadolint" \
+            "https://github.com/hadolint/hadolint/releases/download/v${HADOLINT_VERSION}/hadolint-linux-x86_64"
+          echo "${HADOLINT_SHA256}  $RUNNER_TEMP/hadolint" | sha256sum -c -
+          chmod +x "$RUNNER_TEMP/hadolint"
+          "$RUNNER_TEMP/hadolint" --config .hadolint.yaml "${{ matrix.service }}/Dockerfile"
+
+      - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
+
+      # Caché de capas propia (scope nativo-<servicio>): solo la escribe main, como en ci.yml
+      - name: Construir
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
+        with:
+          context: .
+          file: ${{ matrix.service }}/Dockerfile
+          tags: bank-${{ matrix.service }}:local
+          load: true
+          push: false
+          cache-from: type=gha,scope=nativo-${{ matrix.service }}
+          cache-to: ${{ github.event_name == 'push' && format('type=gha,mode=max,scope=nativo-{0}', matrix.service) || '' }}
+
+      - name: Usuario, HEALTHCHECK y credenciales
+        run: infra/build-images.sh --check-only "${{ matrix.service }}"
+
+      - name: Tamaño
+        run: |
+          docker image inspect "bank-${{ matrix.service }}:local" --format '{{.Size}}' \
+            | awk '{printf "Imagen sin comprimir: %.0f MB\n", $1/1048576}' >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Trivy
+        run: |
+          curl -sSfL -o "$RUNNER_TEMP/trivy.tar.gz" \
+            "https://github.com/aquasecurity/trivy/releases/download/v${TRIVY_VERSION}/trivy_${TRIVY_VERSION}_Linux-64bit.tar.gz"
+          echo "${TRIVY_SHA256}  $RUNNER_TEMP/trivy.tar.gz" | sha256sum -c -
+          tar -xzf "$RUNNER_TEMP/trivy.tar.gz" -C "$RUNNER_TEMP" trivy
+          set -o pipefail
+          TRIVY_BIN="$RUNNER_TEMP/trivy" infra/scan-images.sh "bank-${{ matrix.service }}:local" | tee -a "$GITHUB_STEP_SUMMARY"

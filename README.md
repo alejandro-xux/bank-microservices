@@ -13,6 +13,7 @@ programación reactiva, Kafka, Azure y Quarkus.
 | accounts-service | Spring MVC + JPA + PostgreSQL |
 | accounts-service-quarkus | La misma cuenta en Quarkus 3.40 (E14, en migración): Quarkus REST + Hibernate Panache sobre la misma base, el mismo contrato. Ver abajo |
 | notifications-service | Spring Kafka + PostgreSQL: avisos al cliente a partir de los eventos (sin API pública) |
+| fraud-service | Quarkus 3.40 **nativo** (GraalVM/Mandrel) + Kafka + PostgreSQL: revisa cada transferencia completada (E14, sin API pública). Ver abajo |
 | contracts | Contratos internos: gRPC (`customers.proto`) y eventos de Kafka (`transfer_events.proto`), con su código generado compartido por los servicios ([detalle](contracts/README.md)) |
 
 ## Entorno local
@@ -103,6 +104,23 @@ El gateway tiene dos rutas para `/api/accounts/**` y `/api/transfers/**` en el m
   - `outbox` sin pendientes viejas (las dos versiones publican con el mismo relay coordinado).
 - **Logs de las dos versiones:** `docker logs bank-accounts-service-quarkus` / `bank-accounts-service`.
 
+### fraud-service (E14, BANK-107)
+Servicio nuevo, escrito en Quarkus desde el principio y compilado a **binario nativo** (spike BANK-105). Lee las transferencias completadas de `bank.transfers.v1` con su propio grupo de consumidores, así no le quita eventos a notifications-service, y no toca accounts. Las reglas de fraude y el aviso de una transferencia sospechosa (`bank.fraud.v1`) llegan en BANK-108.
+
+- Puerto **8085**, sin API pública: solo el health está abierto, el resto pide token.
+- Base propia `fraud`. Este servicio sí aplica sus migraciones (Flyway al arrancar). `processed_event` guarda cada evento revisado, así un duplicado de Kafka no se revisa dos veces. Guarda un resumen en JSON sin datos personales.
+- Un mensaje que no se puede leer (sin el header `event-type`, o un `TransferCompleted` sin id) va a `bank.fraud.v1.DLT` sin detener el consumo. Los `TransferFailed` se ignoran.
+- **Nativo en local:** perfil `native` del compose (no `app`), porque la imagen tarda unos 8 minutos y pide unos 6 GB a Docker:
+  ```bash
+  # con los servicios en contenedores (start-local.sh --containers)
+  docker compose -f infra/docker-compose.yml --profile native up -d --build --wait fraud-service
+  # con los servicios en bootRun: el config-server es el del host
+  FRAUD_CONFIG_SERVER_URL=http://host.docker.internal:8888 docker compose -f infra/docker-compose.yml --profile native up -d --build --wait fraud-service
+  ```
+- **En JVM, para desarrollar:** `cd fraud-service && ./gradlew quarkusDev` (con el config-server de bootRun).
+- Pruebas: `./gradlew test` (`@QuarkusTest` con PostgreSQL y Kafka de Testcontainers). Las mismas clases corren contra el binario con `@QuarkusIntegrationTest` (`src/native-test`, tarea `testNative`). Esa prueba solo corre en Linux: en la Mac el binario es para Linux. La corre el workflow `native.yml`, junto con la imagen (hadolint, usuario, HEALTHCHECK, Trivy), cuando cambian fraud-service, contracts o el BOM, en main, cada noche y a mano. No va en cada PR.
+- La imagen es de tres etapas: Temurin arma las fuentes nativas, Mandrel 25 compila el binario y la imagen final es `ubi9-quarkus-micro-image`, sin JVM ni curl. Por eso el HEALTHCHECK usa bash `/dev/tcp`.
+
 ### Datos de prueba (BANK-75)
 Si la base de accounts está vacía (primer arranque o después de `--all`), `start-local.sh` corre `infra/seed-local.sh`, que abre por la API, como un asesor, las cuentas con las que probamos:
 
@@ -138,6 +156,8 @@ Un solo nodo en modo KRaft (broker y controlador, sin ZooKeeper), `apache/kafka:
 |---|---|---|
 | `bank.transfers.v1` | 3 | Transferencias completadas (clave = cuenta origen, así se mantiene el orden por cuenta) |
 | `bank.transfers.v1.DLT` | 3 | Mensajes que no se pudieron procesar |
+| `bank.fraud.v1` | 3 | Transferencias sospechosas (fraud-service, BANK-108) |
+| `bank.fraud.v1.DLT` | 3 | Lo que fraud-service no pudo procesar de `bank.transfers.v1` |
 
 ```bash
 # Ver los topics y leer un topic desde el principio

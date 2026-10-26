@@ -1,0 +1,20 @@
+# fraud-service (E14, BANK-107): las mismas variables que los demás servicios, con los nombres de propiedad de Quarkus.
+# Lo que se fija al compilar (el consumidor, la DLT, la seguridad) está en su application.properties
+quarkus:
+  datasource:
+    username: ${DB_USERNAME:fraud}
+    password: ${DB_PASSWORD:fraud-local}
+    jdbc:
+      url: jdbc:postgresql://${DB_HOST:localhost}:${DB_PORT:5433}/${DB_NAME:fraud}
+  oidc:
+    # Como accounts-service-quarkus: emisor y claves por separado, sin el descubrimiento de Keycloak (spike BANK-98)
+    auth-server-url: ${AUTH_ISSUER_URI:http://localhost:8180/realms/bank}
+    discovery-enabled: false
+    jwks-path: ${AUTH_JWKS_URI:http://localhost:8180/realms/bank/protocol/openid-connect/certs}
+    token:
+      issuer: ${AUTH_ISSUER_URI:http://localhost:8180/realms/bank}
+      audience: ${AUTH_AUDIENCE:bank-api}
+# Kafka del compose por su puerta del host fuera de Docker; en contenedores llega KAFKA_BOOTSTRAP_SERVERS=kafka:9092
+kafka:
+  bootstrap:
+    servers: ${KAFKA_BOOTSTRAP_SERVERS:localhost:9094}
