@@ -38,6 +38,8 @@ dependencies {
     // El mainframe por HTTP (tramas de texto) y el recuperador de la SAGA cada 5 s
     implementation 'io.quarkus:quarkus-rest-client'
     implementation 'io.quarkus:quarkus-scheduler'
+    // El relay del outbox con el cliente de Kafka directo (D5), como el productor de accounts-service
+    implementation 'io.quarkus:quarkus-kafka-client'
     implementation 'io.quarkus:quarkus-smallrye-health'
     implementation 'io.quarkus:quarkus-spring-cloud-config-client'
 
@@ -52,6 +54,7 @@ dependencies {
     testImplementation 'io.quarkus:quarkus-flyway'
     testImplementation 'org.flywaydb:flyway-database-postgresql'
     testImplementation 'org.testcontainers:testcontainers-postgresql'
+    testImplementation 'org.testcontainers:testcontainers-kafka'
 }
 
 tasks.named('test') {

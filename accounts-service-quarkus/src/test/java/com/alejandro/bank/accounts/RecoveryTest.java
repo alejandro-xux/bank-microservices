@@ -33,8 +33,8 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.hamcrest.Matchers.equalTo;
 
 // El recuperador termina toda transferencia PENDING (timeout del core o caída a mitad de la SAGA) sin mover el dinero
-// dos veces: los mismos casos que RecoveryIntegrationTest de accounts-service (BANK-79), sin los eventos del outbox
-// (BANK-102). min-age=0s y review-after=2s vienen del perfil %test. Después de cada prueba: saldos + pendientes = lo
+// dos veces: los mismos casos que RecoveryIntegrationTest de accounts-service (BANK-79), con sus eventos del outbox.
+// min-age=0s y review-after=2s vienen del perfil %test. Después de cada prueba: saldos + pendientes = lo
 // que había
 @QuarkusTest
 class RecoveryTest extends IntegrationTest {
@@ -82,6 +82,7 @@ class RecoveryTest extends IntegrationTest {
 
         assertThat(statusOf()).isEqualTo("COMPLETED");
         assertThat(balance(luisPen)).isEqualTo("1100.99");
+        assertThat(events()).isEqualTo(1);
         // El reintento con la misma clave ahora ve la transferencia completada
         transfer(key, "100.99").statusCode(201)
                 .body("status", equalTo("COMPLETED"))
@@ -118,6 +119,8 @@ class RecoveryTest extends IntegrationTest {
         assertThat(balance(luisPen)).isEqualTo("1000.00");
         assertThat(queryString("select string_agg(type, ', ' order by created_at, type) from movement where account_id = ?", anaPen))
                 .isEqualTo("DEBIT, REVERSAL");
+        // La compensación del recuperador también avisa al que envía (BANK-80)
+        assertThat(queryString("select string_agg(event_type, ', ') from outbox")).isEqualTo("TransferFailed");
     }
 
     @Test
@@ -162,6 +165,7 @@ class RecoveryTest extends IntegrationTest {
         assertThat(results.stream().filter(r -> r > 0).mapToInt(Integer::intValue).sum()).isEqualTo(5);
         assertThat(queryString("select count(*)::text from transfer where status = 'COMPLETED'")).isEqualTo("5");
         assertThat(balance(luisPen)).isEqualTo("1152.05");
+        assertThat(events()).isEqualTo(5);
         assertThat(coreRequests("/core/consultas")).isEqualTo(5);
         assertThat(coreRequests("/core/asientos")).isEqualTo(5);
     }
@@ -170,6 +174,10 @@ class RecoveryTest extends IntegrationTest {
 
     private ValidatableResponse transfer(UUID key, String amount) {
         return TransferTest.transfer(Tokens.customer(Tokens.ANA_OID), key, anaPen, luisPenNumber, amount);
+    }
+
+    private int events() {
+        return Integer.parseInt(queryString("select count(*)::text from outbox"));
     }
 
     private String statusOf() {
