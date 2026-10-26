@@ -79,6 +79,8 @@ public class AccountsTestResource implements QuarkusTestResourceLifecycleManager
                 // 127.0.0.1 y no localhost: el cliente probaba ::1 (IPv6) y el servidor escucha en IPv4
                 Map.entry("quarkus.grpc.clients.customers.host", "127.0.0.1"),
                 Map.entry("quarkus.grpc.clients.customers.test-port", String.valueOf(customersServer.getPort())),
+                // El binario de @QuarkusIntegrationTest corre en modo normal (no de prueba) y no mira test-port (BANK-109)
+                Map.entry("quarkus.grpc.clients.customers.port", String.valueOf(customersServer.getPort())),
                 Map.entry("bank.core-banking.url", coreBankingUrl()),
                 Map.entry("bank.kafka.bootstrap-servers", KAFKA.getBootstrapServers()),
                 Map.entry("quarkus.oidc.public-key", Base64.getEncoder().encodeToString(KEYS.getPublic().getEncoded())),
