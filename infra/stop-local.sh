@@ -38,9 +38,9 @@ if $ALL; then
   "${COMPOSE[@]}" down > /dev/null 2>&1
   echo "• servicios en contenedores, Redis, PostgreSQL, Keycloak, Kafka, Mailpit y el mainframe emulado detenidos"
 elif $CONTAINERS; then
-  # Solo los 8 servicios (con accounts-service-quarkus, BANK-104, y fraud-service, BANK-107): la infraestructura (y
+  # Solo los 9 servicios (con accounts-service-quarkus, BANK-104, fraud-service, BANK-107, y su versión nativa, BANK-109): la infraestructura (y
   # sus datos) sigue corriendo
-  "${COMPOSE[@]}" rm --stop --force api-gateway fraud-service notifications-service accounts-service-quarkus accounts-service \
+  "${COMPOSE[@]}" rm --stop --force api-gateway fraud-service accounts-service-quarkus-native notifications-service accounts-service-quarkus accounts-service \
     customers-service discovery-server config-server > /dev/null 2>&1
   echo "• servicios en contenedores detenidos (la infraestructura sigue corriendo)"
 fi

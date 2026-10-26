@@ -75,6 +75,7 @@ La migración de accounts-service a Quarkus, al lado de la versión Spring, que 
 - Configuración: `accounts-service-quarkus/src/main/resources/application.properties` (lo que se fija al compilar) y `config-repo/accounts-service-quarkus.yml` (lo de cada entorno, con las mismas variables que accounts-service).
 - Pruebas: `cd accounts-service-quarkus && ./gradlew test` (`@QuarkusTest` con PostgreSQL, Kafka y el core emulado de Testcontainers, y un customers falso por gRPC). La cobertura la mide `quarkus-jacoco`, que solo cuenta el código que corre dentro de la aplicación.
 - Imagen: `infra/build-images.sh accounts-service-quarkus` (144 MB comprimida, frente a 211 MB de la versión Spring).
+- **Versión nativa (BANK-109), para medir:** `accounts-service-quarkus/Dockerfile.native`, servicio `accounts-service-quarkus-native` del perfil `native` (sin tráfico del gateway). No necesitó ningún registro de reflexión a mano. Quarkus REST registra los DTO, el ProblemDetail es un `Map`, las tramas del core son texto y el código generado de Protobuf no usa reflexión. La prueba contra el binario es `src/native-test/AccountsNativeIT` y la corre `native.yml`.
 - Mientras convivan las dos versiones, Sonar no cuenta como duplicado el código copiado (`sonar.cpd.exclusions`), y cada módulo tiene su propia cobertura (`sonar.modules`).
 
 #### Canary: pasar el tráfico de Spring a Quarkus (runbook, BANK-104)
@@ -133,7 +134,7 @@ docker exec bank-postgres psql -U fraud -d fraud -c "SELECT reviewed_at, transfe
   # con los servicios en contenedores (start-local.sh --containers)
   docker compose -f infra/docker-compose.yml --profile native up -d --build --wait fraud-service
   # con los servicios en bootRun: el config-server es el del host
-  FRAUD_CONFIG_SERVER_URL=http://host.docker.internal:8888 docker compose -f infra/docker-compose.yml --profile native up -d --build --wait fraud-service
+  NATIVE_CONFIG_SERVER_URL=http://host.docker.internal:8888 docker compose -f infra/docker-compose.yml --profile native up -d --build --wait fraud-service
   ```
 - **En JVM, para desarrollar:** `cd fraud-service && ./gradlew quarkusDev` (con el config-server de bootRun).
 - Pruebas: `./gradlew test` (`@QuarkusTest` con PostgreSQL y Kafka de Testcontainers). Las mismas clases corren contra el binario con `@QuarkusIntegrationTest` (`src/native-test`, tarea `testNative`). Esa prueba solo corre en Linux: en la Mac el binario es para Linux. La corre el workflow `native.yml`, junto con la imagen (hadolint, usuario, HEALTHCHECK, Trivy), cuando cambian fraud-service, contracts o el BOM, en main, cada noche y a mano. No va en cada PR.

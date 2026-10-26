@@ -254,7 +254,27 @@ services:
   # pide ~6 GB a Docker, y no hace falta para el resto del sistema (solo lee bank.transfers.v1). Se levanta aparte:
   #   docker compose -f infra/docker-compose.yml --profile native up -d --build --wait fraud-service
   # El config-server es el de los contenedores (--containers); con los servicios en bootRun, el del host:
-  #   FRAUD_CONFIG_SERVER_URL=http://host.docker.internal:8888 docker compose ... --profile native up -d fraud-service
+  #   NATIVE_CONFIG_SERVER_URL=http://host.docker.internal:8888 docker compose ... --profile native up -d fraud-service
+  # accounts-service-quarkus NATIVO (BANK-109): el mismo código que accounts-service-quarkus, compilado a binario,
+  # para medirlo contra las versiones JVM (BANK-110). Perfil "native", como fraud-service; sin tráfico del gateway
+  # (el canary apunta a la versión JVM). Mismo mem_limit que las versiones JVM, para comparar con las mismas reglas
+  accounts-service-quarkus-native:
+    <<: *servicio
+    profiles: [native]
+    build: {context: .., dockerfile: accounts-service-quarkus/Dockerfile.native}
+    image: bank-accounts-service-quarkus-native:local
+    container_name: bank-accounts-service-quarkus-native
+    mem_limit: 768m
+    environment:
+      <<: *entorno
+      CONFIG_SERVER_URL: ${NATIVE_CONFIG_SERVER_URL:-http://config-server:8888}
+      AUTH_JWKS_URI: http://keycloak:8080/realms/bank/protocol/openid-connect/certs
+      CUSTOMERS_GRPC_HOST: ${NATIVE_CUSTOMERS_GRPC_HOST:-customers-service}
+    depends_on:
+      postgres: {condition: service_healthy}
+      kafka-init: {condition: service_completed_successfully}
+      core-banking-mock: {condition: service_healthy}
+
   fraud-service:
     <<: *servicio
     profiles: [native]
@@ -265,7 +285,7 @@ services:
     mem_limit: 256m
     environment:
       <<: *entorno
-      CONFIG_SERVER_URL: ${FRAUD_CONFIG_SERVER_URL:-http://config-server:8888}
+      CONFIG_SERVER_URL: ${NATIVE_CONFIG_SERVER_URL:-http://config-server:8888}
       AUTH_JWKS_URI: http://keycloak:8080/realms/bank/protocol/openid-connect/certs
     depends_on:
       postgres: {condition: service_healthy}

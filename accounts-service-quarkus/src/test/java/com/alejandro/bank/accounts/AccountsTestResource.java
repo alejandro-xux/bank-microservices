@@ -8,6 +8,7 @@ import io.quarkus.test.common.QuarkusTestResourceLifecycleManager;
 import org.apache.kafka.clients.admin.AdminClient;
 import org.apache.kafka.clients.admin.AdminClientConfig;
 import org.apache.kafka.clients.admin.NewTopic;
+import org.flywaydb.core.Flyway;
 import org.testcontainers.containers.GenericContainer;
 import org.testcontainers.containers.wait.strategy.Wait;
 import org.testcontainers.images.builder.ImageFromDockerfile;
@@ -65,18 +66,24 @@ public class AccountsTestResource implements QuarkusTestResourceLifecycleManager
         } catch (IOException e) {
             throw new UncheckedIOException(e);
         }
-        return Map.of(
-                "quarkus.datasource.jdbc.url", POSTGRES.getJdbcUrl(),
-                "quarkus.datasource.username", POSTGRES.getUsername(),
-                "quarkus.datasource.password", POSTGRES.getPassword(),
+        // El esquema lo crea la prueba con los scripts de accounts-service (src/test/resources/db/migration), no Quarkus:
+        // el binario de @QuarkusIntegrationTest (BANK-109) no lleva los recursos de prueba, así que su Flyway no los
+        // vería. Así la JVM y el binario parten del mismo esquema
+        Flyway.configure().dataSource(POSTGRES.getJdbcUrl(), POSTGRES.getUsername(), POSTGRES.getPassword())
+                .locations("classpath:db/migration").load().migrate();
+        return Map.ofEntries(
+                Map.entry("quarkus.flyway.migrate-at-start", "false"),
+                Map.entry("quarkus.datasource.jdbc.url", POSTGRES.getJdbcUrl()),
+                Map.entry("quarkus.datasource.username", POSTGRES.getUsername()),
+                Map.entry("quarkus.datasource.password", POSTGRES.getPassword()),
                 // 127.0.0.1 y no localhost: el cliente probaba ::1 (IPv6) y el servidor escucha en IPv4
-                "quarkus.grpc.clients.customers.host", "127.0.0.1",
-                "quarkus.grpc.clients.customers.test-port", String.valueOf(customersServer.getPort()),
-                "bank.core-banking.url", coreBankingUrl(),
-                "bank.kafka.bootstrap-servers", KAFKA.getBootstrapServers(),
-                "quarkus.oidc.public-key", Base64.getEncoder().encodeToString(KEYS.getPublic().getEncoded()),
-                "quarkus.oidc.token.issuer", ISSUER,
-                "quarkus.oidc.token.audience", "bank-api");
+                Map.entry("quarkus.grpc.clients.customers.host", "127.0.0.1"),
+                Map.entry("quarkus.grpc.clients.customers.test-port", String.valueOf(customersServer.getPort())),
+                Map.entry("bank.core-banking.url", coreBankingUrl()),
+                Map.entry("bank.kafka.bootstrap-servers", KAFKA.getBootstrapServers()),
+                Map.entry("quarkus.oidc.public-key", Base64.getEncoder().encodeToString(KEYS.getPublic().getEncoded())),
+                Map.entry("quarkus.oidc.token.issuer", ISSUER),
+                Map.entry("quarkus.oidc.token.audience", "bank-api"));
     }
 
     @Override
