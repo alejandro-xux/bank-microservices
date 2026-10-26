@@ -21,7 +21,7 @@ WORKDIR /
 RUN java -Djarmode=tools -jar /app.jar extract --layers --destination /extracted
 
 # --- Ejecución ------------------------------------------------------------------------------------------
-FROM eclipse-temurin:21-jre-noble@sha256:35501d3f93173b420ac9001658eb68157e813316b865087e345c187fca422c4c
+FROM eclipse-temurin:21.0.4_7-jre-noble
 # Usuario sin privilegios con un UID fijo (el mismo en todas las imágenes; en AKS, runAsNonRoot)
 RUN groupadd --system --gid 10001 bank && useradd --system --uid 10001 --gid bank --no-create-home bank
 WORKDIR /app

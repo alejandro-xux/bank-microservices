@@ -40,3 +40,4 @@ HEALTHCHECK --interval=10s --timeout=3s --start-period=60s --retries=3 \
 # JAVA_TOOL_OPTIONS y no en el ENTRYPOINT para poder cambiarlo al correr, sin reconstruir la imagen
 ENV JAVA_TOOL_OPTIONS="-XX:MaxRAMPercentage=60"
 ENTRYPOINT ["java", "-jar", "app.jar"]
+USER root
