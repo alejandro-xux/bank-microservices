@@ -15,8 +15,9 @@ WORKDIR /src/discovery-server
 # La caché de Gradle (distribución y dependencias) queda en BuildKit entre construcciones: con un cambio de código
 # no se vuelve a bajar nada. El jar se separa en capas (dependencias / loader / snapshots / aplicación)
 RUN --mount=type=cache,target=/root/.gradle ./gradlew bootJar --no-daemon -q \
- && cp build/libs/discovery-server-*.jar /app.jar \
- && cd / && java -Djarmode=tools -jar /app.jar extract --layers --destination /extracted
+ && cp build/libs/discovery-server-*.jar /app.jar
+WORKDIR /
+RUN java -Djarmode=tools -jar /app.jar extract --layers --destination /extracted
 
 # --- Ejecución ------------------------------------------------------------------------------------------
 FROM eclipse-temurin:21-jre-noble@sha256:35501d3f93173b420ac9001658eb68157e813316b865087e345c187fca422c4c
@@ -33,7 +34,7 @@ USER 10001
 EXPOSE 8761
 # Docker y compose saben si el servicio está listo para recibir tráfico: la readiness (en AKS, la readinessProbe)
 HEALTHCHECK --interval=10s --timeout=3s --start-period=60s --retries=3 \
-  CMD curl -fsS http://localhost:8761/actuator/health/readiness > /dev/null || exit 1
+  CMD ["curl", "-fsS", "-o", "/dev/null", "http://localhost:8761/actuator/health/readiness"]
 # Sin -Xmx fijo: el heap es el 60 % del límite de memoria del contenedor. El resto es para lo que la JVM usa fuera
 # del heap (metaspace, hilos, buffers de Netty), unos 150-200 MB en estos servicios (BANK-94). Va en
 # JAVA_TOOL_OPTIONS y no en el ENTRYPOINT para poder cambiarlo al correr, sin reconstruir la imagen

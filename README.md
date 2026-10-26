@@ -41,6 +41,7 @@ Cada servicio tiene su `Dockerfile` en dos etapas: compila con el JDK 21 y Gradl
 infra/build-images.sh                      # las 6 imágenes (bank-<servicio>:local) y su revisión
 infra/build-images.sh accounts-service     # solo una
 docker build -f accounts-service/Dockerfile -t bank-accounts-service:local .   # lo mismo, a mano
+infra/scan-images.sh                       # Trivy: vulnerabilidades por severidad; falla con CRITICAL/HIGH que tengan arreglo
 ```
 
 El script revisa cada imagen y falla si algo no cumple: corre con el usuario `10001` (no root), tiene `HEALTHCHECK` contra el actuator y no lleva credenciales en sus variables ni en sus capas (Cosmos y el secreto de notifications llegan al correr, por variables). La caché de Gradle queda en BuildKit: sin cambios una imagen se reconstruye en ~1 s, y con una clase cambiada en ~11 s, porque solo cambia la última capa (la aplicación, cientos de kB) y las dependencias (~130 MB) se reutilizan. La primera vez tarda unos 4 minutos, porque baja Gradle y las dependencias.
