@@ -31,6 +31,15 @@
 - Paquete base: `com.alejandro.bank.<servicio>`.
 
 ## Pruebas
+**Antes de cada push, `infra/pre-push.sh <módulo>` (BANK-106).** Corre en local lo que la CI va a revisar de ese módulo:
+- las pruebas;
+- la cobertura de las líneas cambiadas respecto de `main`, con la fórmula y el umbral de Sonar (80 %; con menos de 20 líneas nuevas no se evalúa);
+- la imagen y Trivy.
+
+Si falla aquí, fallaría en la CI. La CI confirma, no descubre (retro del Sprint 10). Con `--skip-image` se salta la imagen mientras se itera.
+
+**Cobertura en los módulos Quarkus.** `quarkus-jacoco` solo mide lo que corre dentro de la aplicación de un `@QuarkusTest`. Las pruebas unitarias simples las mide el agente de JaCoCo de Gradle en el mismo archivo, y todo sale en un solo XML (`quarkus.jacoco.reuse-data-file`). No hace falta convertir una prueba simple en `@QuarkusTest` para que cuente.
+
 Reglas que salieron de pruebas que fallaban a veces (Sprints 8 y 9). Valen para toda prueba que comparte Kafka, Mailpit o una base con otras.
 
 - **Un consumer group por contexto de Spring.** Spring deja vivos en caché los contextos de otras clases de prueba. Con el mismo grupo, sus listeners se reparten las particiones y el evento de una prueba lo consume otra. Por eso `IntegrationTest` usa `group-id=notifications-test-${random.uuid}`.
