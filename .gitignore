@@ -21,3 +21,6 @@ application-local.yaml
 
 # Entorno local levantado con infra/start-local.sh (logs de cada servicio)
 .local/
+
+# Python (scripts de infra/)
+__pycache__/
