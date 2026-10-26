@@ -215,6 +215,26 @@ services:
       core-banking-mock: {condition: service_healthy}
       customers-service: {condition: service_healthy}
 
+  # La misma cuenta en Quarkus (E14, BANK-99): la misma base y el mismo contrato que accounts-service, que es quien
+  # migra el esquema (este solo lo valida, por eso espera a que accounts-service esté sano). Todavía sin tráfico: el
+  # gateway lo recibe con pesos en BANK-104
+  accounts-service-quarkus:
+    <<: *servicio
+    build: {context: .., dockerfile: accounts-service-quarkus/Dockerfile}
+    image: bank-accounts-service-quarkus:local
+    container_name: bank-accounts-service-quarkus
+    mem_limit: 768m
+    environment:
+      <<: *entorno
+      # Las claves de Keycloak por la red interna (el emisor de los tokens sigue siendo localhost:8180)
+      AUTH_JWKS_URI: http://keycloak:8080/realms/bank/protocol/openid-connect/certs
+      CUSTOMERS_GRPC_HOST: customers-service
+    depends_on:
+      <<: *base
+      postgres: {condition: service_healthy}
+      customers-service: {condition: service_healthy}
+      accounts-service: {condition: service_healthy}
+
   notifications-service:
     <<: *servicio
     build: {context: .., dockerfile: notifications-service/Dockerfile}

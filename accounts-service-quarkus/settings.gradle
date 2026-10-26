@@ -1,0 +1,12 @@
+pluginManagement {
+    repositories {
+        mavenCentral()
+        gradlePluginPortal()
+    }
+}
+
+rootProject.name = 'accounts-service-quarkus'
+// contracts publica platform-bom (Spring) como api: se incluye para poder resolverlo y excluirlo en build.gradle
+includeBuild('../platform-bom')
+// El mismo contrato gRPC/eventos que accounts-service (BANK-60, BANK-68)
+includeBuild('../contracts')

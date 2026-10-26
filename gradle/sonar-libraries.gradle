@@ -1,0 +1,21 @@
+// Tarea sonarLibraries (BANK-84), en su propio archivo desde BANK-99: la usan quality.gradle (los módulos Spring) y
+// accounts-service-quarkus, que mide la cobertura con quarkus-jacoco en vez del plugin jacoco de Gradle
+
+// Los jars de las dependencias (y las clases de contracts, que llegan como carpeta), para que Sonar entienda los tipos que usa el código (sin ellos el análisis del
+// spike BANK-82 quedó con tipos sin resolver). El análisis corre en otro job: esta tarea escribe las rutas de los
+// jars en esa máquina, desde la caché de Gradle
+tasks.register('sonarLibraries') {
+    description = 'Escribe en build/sonar las rutas de los jars de main y de las pruebas'
+    def main = configurations.compileClasspath
+    def test = configurations.testCompileClasspath
+    def out = layout.buildDirectory.dir('sonar')
+    // Declararlas como entrada hace que Gradle construya antes lo que venga de includeBuild (contracts)
+    inputs.files(main, test)
+    outputs.upToDateWhen { false }
+    doLast {
+        def dir = out.get().asFile
+        dir.mkdirs()
+        new File(dir, 'libraries.txt').text = main.files.findAll { it.exists() }.join(',')
+        new File(dir, 'test-libraries.txt').text = test.files.findAll { it.exists() }.join(',')
+    }
+}

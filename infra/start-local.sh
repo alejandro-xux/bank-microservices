@@ -99,7 +99,7 @@ if $CONTAINERS; then
     echo "✗ algún servicio no quedó sano. Revisa $LOGS/containers.log y docker compose -f infra/docker-compose.yml --profile app ps" >&2
     exit 1
   fi
-  echo "• config-server, discovery-server, customers-service, accounts-service, notifications-service y api-gateway healthy"
+  echo "• config-server, discovery-server, customers-service, accounts-service (Spring y Quarkus), notifications-service y api-gateway healthy"
   GATEWAY_LOG="docker logs bank-api-gateway"
   # accounts no se publica a la Mac: el seed abre las cuentas por el gateway
   export ACCOUNTS_URL=http://localhost:8080/api

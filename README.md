@@ -11,6 +11,7 @@ programación reactiva, Kafka, Azure y Quarkus.
 | api-gateway | Spring Cloud Gateway Server WebFlux (punto de entrada único, valida el JWT) |
 | customers-service | Spring WebFlux + Cosmos DB + Redis (cache) |
 | accounts-service | Spring MVC + JPA + PostgreSQL |
+| accounts-service-quarkus | La misma cuenta en Quarkus 3.40 (E14, en migración): Quarkus REST + Hibernate Panache sobre la misma base, el mismo contrato. Ver abajo |
 | notifications-service | Spring Kafka + PostgreSQL: avisos al cliente a partir de los eventos (sin API pública) |
 | contracts | Contratos internos: gRPC (`customers.proto`) y eventos de Kafka (`transfer_events.proto`), con su código generado compartido por los servicios ([detalle](contracts/README.md)) |
 
@@ -61,6 +62,15 @@ Unos 100 MB de cada una son el JRE y Ubuntu, que se comparten: en un registro o 
 - **Memoria.** Cada servicio tiene un límite de memoria en compose (`mem_limit`: config 384 MB, discovery, gateway y notifications 512 MB, customers y accounts 768 MB). El heap es el 60 % de ese límite, por `JAVA_TOOL_OPTIONS` en la imagen, que se puede cambiar al correr. Medido con carga: entre 180 y 490 MB por servicio, sin ningún OOMKilled.
 - **Health check.** El `HEALTHCHECK` mira la readiness, que incluye la base o Cosmos según el servicio. La liveness no depende de nada externo.
 - **Apagado ordenado.** Con `server.shutdown: graceful`, un `docker stop` deja terminar las peticiones en curso. Compose le da 30 s antes de cortarlo.
+
+### accounts-service-quarkus (E14, BANK-99)
+La migración de accounts-service a Quarkus, al lado de la versión Spring, que no se toca (estrategia *strangler*). Las dos usan la misma base `accounts`, la misma API, los mismos eventos y el mismo `.proto`. Solo Spring aplica las migraciones de Flyway; Quarkus valida al arrancar que sus entidades coincidan con las tablas, y si no coinciden no arranca.
+
+- Puerto **8084**. Corre en el modo `--containers` (perfil `app`), sin recibir tráfico del gateway hasta el canary de BANK-104.
+- Configuración: `accounts-service-quarkus/src/main/resources/application.properties` (lo que se fija al compilar) y `config-repo/accounts-service-quarkus.yml` (lo de cada entorno, con las mismas variables que accounts-service).
+- Pruebas: `cd accounts-service-quarkus && ./gradlew test` (`@QuarkusTest` con PostgreSQL de Testcontainers y un customers falso por gRPC). La cobertura la mide `quarkus-jacoco`.
+- Imagen: `infra/build-images.sh accounts-service-quarkus` (144 MB comprimida, frente a 211 MB de la versión Spring).
+- Mientras convivan las dos versiones, Sonar no cuenta como duplicado el código copiado (`sonar.cpd.exclusions`).
 
 ### Datos de prueba (BANK-75)
 Si la base de accounts está vacía (primer arranque o después de `--all`), `start-local.sh` corre `infra/seed-local.sh`, que abre por la API, como un asesor, las cuentas con las que probamos:

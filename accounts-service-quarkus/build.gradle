@@ -1,0 +1,52 @@
+// accounts-service en Quarkus (E14, BANK-99): la misma API, los mismos eventos y la misma base que accounts-service
+// (Spring), que no se toca. Conviven mientras el gateway pasa el tráfico de una a otra (estrategia strangler)
+plugins {
+    id 'java'
+    id 'io.quarkus' version '3.40.1'
+}
+
+group = 'com.alejandro.bank'
+version = '0.0.1-SNAPSHOT'
+
+java {
+    toolchain {
+        languageVersion = JavaLanguageVersion.of(21)
+    }
+}
+
+repositories {
+    mavenCentral()
+}
+
+// Solo la tarea de las rutas para Sonar: la cobertura la mide quarkus-jacoco (el plugin jacoco de Gradle no coincide
+// con las clases que Quarkus transforma al arrancar)
+apply from: '../gradle/sonar-libraries.gradle'
+
+dependencies {
+    // Quarkus 3.40.1 (LTS, spike BANK-98). Enforced: sus versiones mandan sobre cualquier otra que llegue por contracts
+    implementation enforcedPlatform('io.quarkus.platform:quarkus-bom:3.40.1')
+    // contracts trae platform-bom (las versiones de Spring) como api; aquí no sirven y subirían Netty a 4.2
+    implementation('com.alejandro.bank:contracts') {
+        exclude group: 'com.alejandro.bank', module: 'platform-bom'
+    }
+    implementation 'io.quarkus:quarkus-rest-jackson'
+    implementation 'io.quarkus:quarkus-hibernate-orm-panache'
+    implementation 'io.quarkus:quarkus-jdbc-postgresql'
+    implementation 'io.quarkus:quarkus-oidc'
+    implementation 'io.quarkus:quarkus-grpc'
+    implementation 'io.quarkus:quarkus-smallrye-health'
+    implementation 'io.quarkus:quarkus-spring-cloud-config-client'
+
+    testImplementation 'io.quarkus:quarkus-junit5'
+    testImplementation 'io.quarkus:quarkus-test-security-oidc'
+    testImplementation 'io.quarkus:quarkus-jacoco'
+    testImplementation 'io.rest-assured:rest-assured'
+    // El esquema en las pruebas: los mismos scripts de accounts-service. En producción solo Spring migra (D3)
+    testImplementation 'io.quarkus:quarkus-flyway'
+    testImplementation 'org.flywaydb:flyway-database-postgresql'
+    testImplementation 'org.testcontainers:testcontainers-postgresql'
+}
+
+tasks.named('test') {
+    systemProperty 'java.util.logging.manager', 'org.jboss.logmanager.LogManager'
+}
