@@ -8,7 +8,7 @@
     "url": "/core/asientos",
     "bodyPatterns": [
       {
-        "matches": "^TRX.{57}\\d{13}13$"
+        "matches": "^TRX.{57}\\d{13}14$"
       }
     ]
   },
