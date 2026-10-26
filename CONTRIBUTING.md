@@ -50,7 +50,7 @@ Reglas que salieron de pruebas que fallaban a veces (Sprints 8 y 9). Valen para 
   1. **Rotar el secreto.** Revocarlo donde se emitió (Azure, Keycloak, SonarCloud…) y generar otro. Este es el paso que importa: el repo es público, y lo que llegó a GitHub ya se puede haber copiado, aunque nunca llegue a `main`.
   2. Sacarlo del código y pasarlo a una variable de entorno o a un secret.
   3. Si ya está en el historial, borrarlo de ahí (reescribir la historia) es una decisión aparte, que no reemplaza la rotación.
-  4. Solo si el valor **no** es un secreto (un ejemplo, un valor de prueba local que ya es público), se agrega una excepción en `.gitleaks.toml` con el motivo. Hoy no hay ninguna: las credenciales locales (`ana-local`, `asesor-local`…) no se parecen a un secreto y gitleaks no las marca.
+  4. Solo si el valor **no** es un secreto (un ejemplo, un valor de prueba local que ya es público), se agrega una excepción en `.gitleaks.toml` con el motivo. Hoy hay una: la clave del emulador de Cosmos (BANK-96), pública y la misma en todos los emuladores. Las credenciales locales (`ana-local`, `asesor-local`…) no se parecen a un secreto y gitleaks no las marca.
 - **Imágenes** (job `images`, parte de `ci-ok`, BANK-95). Cada PR construye las 6 imágenes y las revisa.
   - **hadolint** revisa los Dockerfiles. Cualquier aviso falla. Una regla que no aplique va en `.hadolint.yaml` con su motivo.
   - **`infra/build-images.sh --check-only`** revisa cada imagen: usuario `10001`, HEALTHCHECK y ninguna credencial dentro.

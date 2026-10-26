@@ -28,4 +28,12 @@ open build/karate-reports/karate-summary.html
 - Un servicio caído hace fallar la prueba en segundos, con el 503 del gateway: no se queda esperando (timeouts de 5 s y 10 s).
 - Justo después de reiniciar un servicio, el gateway puede seguir respondiendo 503 unos 20 s: necesita ver el servicio otra vez en Eureka y que su circuit breaker se cierre. Se espera y se vuelve a correr.
 
-En la CI llega en E10, cuando haya imágenes Docker de los servicios.
+## En la CI (BANK-96)
+Corre en cada PR, en el job `e2e`, y es parte de `ci-ok`: un PR que rompe un camino de punta a punta no se puede mergear. `tests/e2e/run-ci.sh` hace lo siguiente:
+
+1. Levanta el sistema completo en contenedores, con las imágenes de BANK-92.
+2. En vez del Cosmos real usa el emulador (`infra/docker-compose.ci.yml`): la CI no tiene secretos, y los PRs de forks tampoco los recibirían. `infra/cosmos-emulator/init.py` le crea la base, el contenedor y los clientes de prueba con los mismos ids (`infra/cosmos-emulator/customers.json`).
+3. Espera las rutas del gateway, abre las cuentas de prueba y precalienta el camino accounts → customers. La primera llamada gRPC en frío pasa el deadline de 2 s.
+4. Corre estas mismas features.
+
+El resumen del job dice cuántos escenarios pasaron y cuál falló. Si falla, el artifact `e2e-logs` tiene el log de cada contenedor y el reporte de Karate.

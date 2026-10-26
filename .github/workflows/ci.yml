@@ -225,6 +225,8 @@ jobs:
       HADOLINT_SHA256: c7187db94eeeeca956519a6af171adc31453941a1e777961f6e680f697c8c507
       TRIVY_VERSION: 0.75.0
       TRIVY_SHA256: c6e65abddb348e25f10549df887045629cf28cc72453cd1c63acb717316b3f3f
+      # build-push-action sube por defecto un artifact .dockerbuild por imagen; el resumen del job ya alcanza
+      DOCKER_BUILD_RECORD_UPLOAD: "false"
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
@@ -264,9 +266,78 @@ jobs:
           set -o pipefail
           TRIVY_BIN="$RUNNER_TEMP/trivy" infra/scan-images.sh "bank-${{ matrix.service }}:local" | tee -a "$GITHUB_STEP_SUMMARY"
 
+  # Prueba de punta a punta (BANK-96): el sistema completo en contenedores, con el emulador de Cosmos (sin secretos,
+  # también en PRs de forks), y Karate contra el gateway: login real, transferencias, el mainframe emulado y los
+  # correos. Corre en paralelo con lo demás; las imágenes salen de la misma caché que el job images
+  e2e:
+    name: e2e
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - uses: actions/setup-java@b843ebf9b913146b38da2eaa7aeddf76074ae1ad # v6.1.0
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      - uses: gradle/actions/setup-gradle@3f5f9adaf7d9fecd50b5935e54106014257a94e6 # v6.4.0
+
+      - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
+
+      # Deja a docker buildx leer la caché de Actions (la que escribe el job images en main)
+      - uses: crazy-max/ghaction-github-runtime@04d248b84655b509d8c44dc1d6f990c879747487 # v4.0.0
+
+      - name: Construir las 6 imágenes
+        run: |
+          for service in config-server discovery-server customers-service accounts-service notifications-service api-gateway; do
+            echo "::group::$service"
+            docker buildx build --load -f "$service/Dockerfile" -t "bank-$service:local" \
+              --cache-from "type=gha,scope=$service" .
+            echo "::endgroup::"
+          done
+
+      - name: Prueba de punta a punta
+        run: tests/e2e/run-ci.sh
+
+      - name: Resumen
+        if: always()
+        run: |
+          python3 -I - <<'EOF' >> "$GITHUB_STEP_SUMMARY"
+          import json, pathlib
+          summary = pathlib.Path("tests/e2e/build/karate-reports/karate-summary-json.txt")
+          if not summary.exists():
+              print("### E2E\n\nKarate no llegó a correr: ver el paso anterior y los logs de los contenedores (artifact e2e-logs)")
+              raise SystemExit
+          data = json.loads(summary.read_text())
+          print(f"### E2E: {data['scenariosPassed']} escenarios pasaron, {data['scenariosfailed']} fallaron "
+                f"({data['elapsedTime'] / 1000:.1f} s)\n")
+          for report in pathlib.Path("tests/e2e/build/karate-reports").glob("*.karate-json.txt"):
+              for scenario in json.loads(report.read_text()).get("scenarioResults", []):
+                  if scenario.get("failed"):
+                      print(f"- ✗ **{scenario['name']}**: {str(scenario.get('error', ''))[:300]}")
+          EOF
+
+      - name: Logs de los contenedores
+        if: failure()
+        run: |
+          mkdir -p e2e-logs
+          for container in $(docker ps -a --format '{{.Names}}' | grep '^bank-'); do
+            docker logs "$container" > "e2e-logs/$container.log" 2>&1 || true
+          done
+          cp -r tests/e2e/build/karate-reports e2e-logs/ 2>/dev/null || true
+
+      - name: Guardar los logs
+        if: failure()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: e2e-logs
+          path: e2e-logs
+          retention-days: 7
+
   ci-ok:
     name: ci-ok
-    needs: [test, sonar, gitleaks, buf, images]
+    needs: [test, sonar, gitleaks, buf, images, e2e]
     if: always()
     runs-on: ubuntu-latest
     timeout-minutes: 5
@@ -278,11 +349,13 @@ jobs:
           GITLEAKS: ${{ needs.gitleaks.result }}
           BUF: ${{ needs.buf.result }}
           IMAGES: ${{ needs.images.result }}
+          E2E: ${{ needs.e2e.result }}
           SONAR_CANNOT_RUN: ${{ github.actor == 'dependabot[bot]' || (github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository) }}
         run: |
-          echo "Pruebas: $TESTS · Sonar: $SONAR · Sonar no puede correr aquí: $SONAR_CANNOT_RUN · gitleaks: $GITLEAKS · buf: $BUF · imágenes: $IMAGES"
+          echo "Pruebas: $TESTS · Sonar: $SONAR · Sonar no puede correr aquí: $SONAR_CANNOT_RUN · gitleaks: $GITLEAKS · buf: $BUF · imágenes: $IMAGES · e2e: $E2E"
           test "$TESTS" = "success"
           test "$GITLEAKS" = "success"
           test "$BUF" = "success"
           test "$IMAGES" = "success"
+          test "$E2E" = "success"
           test "$SONAR" = "success" || { test "$SONAR" = "skipped" && test "$SONAR_CANNOT_RUN" = "true"; }

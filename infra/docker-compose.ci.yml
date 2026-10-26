@@ -1,0 +1,36 @@
+# Lo que cambia en la CI (BANK-96), encima de docker-compose.yml:
+#   docker compose -f infra/docker-compose.yml -f infra/docker-compose.ci.yml --profile app up
+# En la CI no hay Cosmos real ni secretos (el repo es público y los PR de forks no los reciben): customers-service usa
+# el emulador de Cosmos (spike BANK-91 C7), que infra/cosmos-emulator/init.py deja con la base, el contenedor y los
+# clientes de prueba. Lo demás es igual que en local
+services:
+  cosmos:
+    profiles: [app]
+    image: mcr.microsoft.com/cosmosdb/linux/azure-cosmos-emulator:vnext-preview@sha256:db53613dae19d0a3d5ad50688d14aa6e957af082dafea56b52e1bd3a6b3f1406
+    container_name: bank-cosmos
+    # Con http el SDK de Java igual intenta TLS y falla: https con el certificado propio del emulador
+    command: ["--protocol", "https", "--enable-explorer", "false"]
+    # Publicado para que init.py lo prepare desde fuera
+    ports:
+      - "8081:8081"
+    healthcheck:
+      test: ["CMD", "curl", "-skf", "-o", "/dev/null", "https://localhost:8081/"]
+      interval: 5s
+      timeout: 3s
+      retries: 30
+
+  customers-service:
+    # Sin el archivo de credenciales del Cosmos real
+    env_file: !reset []
+    environment:
+      COSMOS_ENDPOINT: https://cosmos:8081
+      # Clave pública y fija del emulador (la documenta Microsoft): no es un secreto (.gitleaks.toml)
+      COSMOS_KEY: C2y6yDjf5/R+ob0N8A7Cgv30VRDJIWEHLM+4QDU9DaOtpvXTGaw2DStuL8HEBjrUXXMTwrS8iwPYr+lbwz5Y5Q==
+      # El emulador solo habla por el gateway HTTP, y su certificado es propio: el SDK lo acepta solo para el host
+      # del emulador (COSMOS_EMULATOR_HOST)
+      SPRING_CLOUD_AZURE_COSMOS_CONNECTION_MODE: gateway
+      SPRING_CLOUD_AZURE_COSMOS_ENDPOINT_DISCOVERY_ENABLED: "false"
+      COSMOS_EMULATOR_SERVER_CERTIFICATE_VALIDATION_DISABLED: "true"
+      COSMOS_EMULATOR_HOST: cosmos
+    depends_on:
+      cosmos: {condition: service_healthy}
