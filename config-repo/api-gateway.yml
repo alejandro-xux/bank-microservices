@@ -42,17 +42,24 @@ spring:
                     name: customers
                     fallbackUri: forward:/fallback/service-unavailable
                     statusCodes: 500,502,503,504
-            # /api/accounts/** y /api/transfers/** → accounts-service (BANK-58), con el mismo límite por usuario
-            # (cada ruta tiene su propio balde: abusar de una no bloquea la otra) y su propio circuito.
-            # ACCOUNTS_SERVICE_URI permite apuntar a una URL fija (pruebas o sin Eureka).
+            # /api/accounts/** y /api/transfers/** → accounts (BANK-58), repartido entre sus dos versiones con pesos
+            # (canary, BANK-104): las dos rutas están en el mismo grupo "accounts" y cada petición va a una sola. Peso de
+            # cada versión: bank.canary.accounts.* de este archivo si está (se cambia en caliente con POST
+            # /actuator/refresh, runbook en el README), si no ACCOUNTS_SPRING_WEIGHT / ACCOUNTS_QUARKUS_WEIGHT del
+            # entorno (la E2E, o volver atrás reiniciando), y si no 100/0: todo a Spring. Una clave de este archivo con
+            # el MISMO nombre que la variable no le ganaría: aquí manda la variable de entorno (probado en BANK-104)
+            # Cada ruta tiene su propio balde de rate limit, su propio circuito y dice quién respondió (X-Served-By).
+            # ACCOUNTS_SERVICE_URI / ACCOUNTS_QUARKUS_URI permiten apuntar a una URL fija (pruebas o sin Eureka).
             # Si una transferencia pasa de 3 s el gateway responde 503 aunque se haya hecho: el reintento con
             # la misma Idempotency-Key devuelve la transferencia real sin cobrar dos veces (BANK-56)
             - id: accounts
               uri: ${ACCOUNTS_SERVICE_URI:lb://accounts-service}
               predicates:
                 - Path=/api/accounts/**,/api/transfers/**
+                - Weight=accounts, ${bank.canary.accounts.spring-weight:${ACCOUNTS_SPRING_WEIGHT:100}}
               filters:
                 - StripPrefix=1
+                - AddResponseHeader=X-Served-By, accounts-service
                 - name: RequestRateLimiter
                   args:
                     redis-rate-limiter.replenishRate: ${RATE_LIMIT_REPLENISH:10}
@@ -64,6 +71,26 @@ spring:
                 - name: CircuitBreaker
                   args:
                     name: accounts
+                    fallbackUri: forward:/fallback/service-unavailable
+                    statusCodes: 500,502,504
+            # La versión Quarkus (E14): mismos filtros, su propio circuito. Si se cae durante el canary, solo su parte
+            # del tráfico recibe el 503 del circuito; la de Spring sigue igual
+            - id: accounts-quarkus
+              uri: ${ACCOUNTS_QUARKUS_URI:http://localhost:8084}
+              predicates:
+                - Path=/api/accounts/**,/api/transfers/**
+                - Weight=accounts, ${bank.canary.accounts.quarkus-weight:${ACCOUNTS_QUARKUS_WEIGHT:0}}
+              filters:
+                - StripPrefix=1
+                - AddResponseHeader=X-Served-By, accounts-service-quarkus
+                - name: RequestRateLimiter
+                  args:
+                    redis-rate-limiter.replenishRate: ${RATE_LIMIT_REPLENISH:10}
+                    redis-rate-limiter.burstCapacity: ${RATE_LIMIT_BURST:20}
+                    key-resolver: "#{@userKeyResolver}"
+                - name: CircuitBreaker
+                  args:
+                    name: accounts-quarkus
                     fallbackUri: forward:/fallback/service-unavailable
                     statusCodes: 500,502,504
 
@@ -80,7 +107,7 @@ resilience4j:
         permitted-number-of-calls-in-half-open-state: 3
         automatic-transition-from-open-to-half-open-enabled: true
         register-health-indicator: true
-      accounts:
+      accounts: &accounts-circuit
         sliding-window-size: 10
         minimum-number-of-calls: 5
         failure-rate-threshold: 50
@@ -88,6 +115,8 @@ resilience4j:
         permitted-number-of-calls-in-half-open-state: 3
         automatic-transition-from-open-to-half-open-enabled: true
         register-health-indicator: true
+      # La versión Quarkus, con las mismas reglas y su propio estado (BANK-104)
+      accounts-quarkus: *accounts-circuit
   # El time limiter de Resilience4j trae 1 s por defecto: se alinea con el response-timeout (3 s)
   timelimiter:
     instances:
@@ -95,13 +124,24 @@ resilience4j:
         timeout-duration: 3s
       accounts:
         timeout-duration: 3s
+      accounts-quarkus:
+        timeout-duration: 3s
+
+# El cliente de Eureka fuera del /actuator/refresh (BANK-104): por defecto se vuelve a crear en cada refresh y en este
+# gateway falla (NullPointerException al reconstruirlo, refresh con 500). El refresh solo tiene que traer los pesos
+# del canary; la lista de instancias de Eureka se actualiza sola cada 30 s
+eureka:
+  client:
+    refresh:
+      enable: false
 
 management:
   endpoints:
     web:
       exposure:
-        # circuitbreakers: estado de cada circuito (pide token, como todo salvo el health)
-        include: health,info,circuitbreakers
+        # circuitbreakers: estado de cada circuito; refresh: aplica los pesos del canary sin reiniciar (BANK-104).
+        # Solo el asesor (ADMIN), salvo el health (SecurityConfig)
+        include: health,info,circuitbreakers,refresh
   endpoint:
     health:
       probes:
@@ -109,3 +149,11 @@ management:
   health:
     circuitbreakers:
       enabled: true
+
+# Canary de accounts (BANK-104). Para mover el tráfico: descomentar, poner los pesos (suman 100) y
+# POST /actuator/refresh con el token del asesor. Para volver atrás: 100 y 0, y refresh otra vez. Runbook en el README
+# bank:
+#   canary:
+#     accounts:
+#       spring-weight: 90
+#       quarkus-weight: 10

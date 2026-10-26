@@ -66,12 +66,42 @@ Unos 100 MB de cada una son el JRE y Ubuntu, que se comparten: en un registro o 
 ### accounts-service-quarkus (E14, BANK-99)
 La migración de accounts-service a Quarkus, al lado de la versión Spring, que no se toca (estrategia *strangler*). Las dos usan la misma base `accounts`, la misma API, los mismos eventos y el mismo `.proto`. Solo Spring aplica las migraciones de Flyway; Quarkus valida al arrancar que sus entidades coincidan con las tablas, y si no coinciden no arranca.
 
-- Puerto **8084**. Corre en el modo `--containers` (perfil `app`), sin recibir tráfico del gateway hasta el canary de BANK-104.
-- Endpoints migrados (BANK-100): `/accounts/me`, `/accounts/{id}`, `/accounts?customerId=`, `POST /accounts`, `POST /accounts/{id}/deposits` y `/accounts/{id}/movements`, con los mismos códigos, JSON y errores. Un depósito hecho por una versión y reintentado por la otra con la misma `Idempotency-Key` devuelve el mismo movimiento.
+- Puerto **8084**. Corre en el modo `--containers` (perfil `app`). El gateway le manda tráfico según los pesos del canary (abajo); por defecto, ninguno.
+- Todo accounts migrado: consultas, apertura y depósitos (BANK-100), transferencias con la SAGA del core y el recuperador (BANK-101), y el outbox con su relay a Kafka y la limpieza (BANK-102). Tiene los mismos códigos, JSON, errores y eventos. Entre las dos versiones se coordinan por la base:
+    - una `Idempotency-Key` usada en una sirve en la otra;
+    - el recuperador (candado consultivo 79) y el relay (candado 69) corren en uno solo a la vez.
+- Paridad (BANK-103): el mismo `transferencias.feature` y la misma E2E corren contra las dos versiones; `tests/parity/compare-errors.sh` compara sus errores campo por campo.
 - Configuración: `accounts-service-quarkus/src/main/resources/application.properties` (lo que se fija al compilar) y `config-repo/accounts-service-quarkus.yml` (lo de cada entorno, con las mismas variables que accounts-service).
-- Pruebas: `cd accounts-service-quarkus && ./gradlew test` (`@QuarkusTest` con PostgreSQL de Testcontainers y un customers falso por gRPC). La cobertura la mide `quarkus-jacoco`.
+- Pruebas: `cd accounts-service-quarkus && ./gradlew test` (`@QuarkusTest` con PostgreSQL, Kafka y el core emulado de Testcontainers, y un customers falso por gRPC). La cobertura la mide `quarkus-jacoco`, que solo cuenta el código que corre dentro de la aplicación.
 - Imagen: `infra/build-images.sh accounts-service-quarkus` (144 MB comprimida, frente a 211 MB de la versión Spring).
-- Mientras convivan las dos versiones, Sonar no cuenta como duplicado el código copiado (`sonar.cpd.exclusions`).
+- Mientras convivan las dos versiones, Sonar no cuenta como duplicado el código copiado (`sonar.cpd.exclusions`), y cada módulo tiene su propia cobertura (`sonar.modules`).
+
+#### Canary: pasar el tráfico de Spring a Quarkus (runbook, BANK-104)
+El gateway tiene dos rutas para `/api/accounts/**` y `/api/transfers/**` en el mismo grupo de pesos. Cada petición va a una sola versión, y la respuesta dice cuál la atendió en el header `X-Served-By` (`accounts-service` o `accounts-service-quarkus`). Cada versión tiene su propio circuito (`accounts`, `accounts-quarkus`) y su propio balde de rate limit.
+
+**Avanzar** (100/0 → 90/10 → 0/100), sin reiniciar nada:
+
+1. En `config-repo/api-gateway.yml`, descomentar el bloque `bank.canary.accounts` del final y poner los pesos (suman 100).
+2. Aplicarlos con el token del asesor (el actuator del gateway es solo para ADMIN):
+   ```bash
+   ADMIN=$(curl -s -X POST http://localhost:8180/realms/bank/protocol/openid-connect/token \
+     -d grant_type=password -d client_id=bank-cli -d username=asesor -d password=asesor-local | jq -r .access_token)
+   curl -s -X POST -H "Authorization: Bearer $ADMIN" http://localhost:8080/actuator/refresh
+   # ["bank.canary.accounts.quarkus-weight","bank.canary.accounts.spring-weight"]: los pesos nuevos ya rigen
+   ```
+3. Mirar unos minutos antes del paso siguiente (qué mirar, abajo).
+
+**Volver atrás:** los pesos en 100 y 0, y el mismo `refresh`. Si el refresh no responde, el último recurso es reiniciar el gateway con `ACCOUNTS_SPRING_WEIGHT=100 ACCOUNTS_QUARKUS_WEIGHT=0`, las variables de arranque. Un peso de `config-repo` gana a la variable, así que antes hay que volver a comentar el bloque.
+
+**Qué mirar:**
+- **Reparto y errores por versión:**
+  - `X-Served-By` de las respuestas;
+  - una carga de ensayo: `python3 -I tests/canary/carga.py --segundos 300 --por-segundo 4 --salida carga.jsonl` y después `--resumen carga.jsonl --fases fases.txt`.
+- **Circuito de cada versión:** `GET /actuator/circuitbreakers` (asesor). Si Quarkus se cae, solo su parte del tráfico recibe el 503 del circuito; la de Spring sigue igual. Ese 503 lo arma el gateway (plan B del circuito) y viene **sin** `X-Served-By`. En el ensayo, con Quarkus apagado y 90/10, el 11.5 % recibió 503 y el resto respondió bien.
+- **El banco no crea ni pierde dinero:**
+  - saldos + transferencias `PENDING` iguales antes y después;
+  - `outbox` sin pendientes viejas (las dos versiones publican con el mismo relay coordinado).
+- **Logs de las dos versiones:** `docker logs bank-accounts-service-quarkus` / `bank-accounts-service`.
 
 ### Datos de prueba (BANK-75)
 Si la base de accounts está vacía (primer arranque o después de `--all`), `start-local.sh` corre `infra/seed-local.sh`, que abre por la API, como un asesor, las cuentas con las que probamos:

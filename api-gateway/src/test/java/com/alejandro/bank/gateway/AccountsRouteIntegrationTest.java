@@ -57,7 +57,10 @@ class AccountsRouteIntegrationTest extends GatewayIntegrationTestSupport {
 
     @Test
     void accountsPathsArriveWithoutTheApiPrefixAndWithTheSameToken() throws Exception {
-        assertThat(get("/api/accounts/me", ana).statusCode()).isEqualTo(200);
+        HttpResponse<String> me = get("/api/accounts/me", ana);
+        assertThat(me.statusCode()).isEqualTo(200);
+        // Pesos por defecto del canary (100/0, BANK-104): todo a la versión Spring
+        assertThat(me.headers().firstValue("X-Served-By")).hasValue("accounts-service");
         assertThat(get("/api/accounts/abc-123/movements", ana).statusCode()).isEqualTo(200);
 
         assertThat(RECEIVED).extracting(Received::path).containsExactly("/accounts/me", "/accounts/abc-123/movements");

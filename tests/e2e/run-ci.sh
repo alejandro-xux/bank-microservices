@@ -7,10 +7,10 @@
 #                                                 (BANK-103); por defecto, spring
 set -euo pipefail
 
-# Qué versión de accounts atiende /api/accounts y /api/transfers: el gateway la toma de ACCOUNTS_SERVICE_URI
+# Qué versión de accounts atiende /api/accounts y /api/transfers: los pesos del canary del gateway (BANK-104)
 case "${E2E_ACCOUNTS:-spring}" in
-  spring) ;;
-  quarkus) export ACCOUNTS_SERVICE_URI=http://accounts-service-quarkus:8084 ;;
+  spring) export ACCOUNTS_SPRING_WEIGHT=100 ACCOUNTS_QUARKUS_WEIGHT=0 ;;
+  quarkus) export ACCOUNTS_SPRING_WEIGHT=0 ACCOUNTS_QUARKUS_WEIGHT=100 ;;
   *) echo "✗ E2E_ACCOUNTS debe ser spring o quarkus, no ${E2E_ACCOUNTS}" >&2; exit 2 ;;
 esac
 
