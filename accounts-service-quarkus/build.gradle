@@ -57,6 +57,19 @@ dependencies {
     testImplementation 'org.testcontainers:testcontainers-kafka'
 }
 
+// Parches de seguridad que la BOM de Quarkus todavía no trae (Trivy, D7 de BANK-95): la misma versión que
+// platform-bom fija para los servicios Spring. enforcedPlatform gana a una restricción común; esto gana a los dos.
+// Se quita cuando la BOM de Quarkus traiga una versión igual o mayor
+configurations.configureEach {
+    resolutionStrategy.eachDependency { details ->
+        // HIGH CVE-2026-106451 en 1.11.1 (la compresión del cliente de Kafka)
+        if (details.requested.group == 'at.yawk.lz4' && details.requested.name == 'lz4-java') {
+            details.useVersion '1.11.4'
+            details.because 'CVE-2026-106451: la BOM de Quarkus 3.40.1 trae 1.11.1'
+        }
+    }
+}
+
 tasks.named('test') {
     systemProperty 'java.util.logging.manager', 'org.jboss.logmanager.LogManager'
 }
