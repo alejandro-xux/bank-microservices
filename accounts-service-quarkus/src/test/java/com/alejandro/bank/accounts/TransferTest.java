@@ -239,6 +239,13 @@ class TransferTest extends IntegrationTest {
     }
 
     @Test
+    void anyOtherWebErrorKeepsTheResponseQuarkusBuilds() {
+        // El mapper de WebApplicationException solo cambia los errores de JSON: un método que no existe sigue en 405
+        given().header("Authorization", Tokens.customer(Tokens.ANA_OID)).contentType("application/json").body("{}")
+                .when().put("/transfers").then().statusCode(405);
+    }
+
+    @Test
     void idempotencyKeyIsRequiredAndMustBeAUuid() {
         String body = body(anaPen, luisPenNumber, "10.00");
         given().header("Authorization", Tokens.customer(Tokens.ANA_OID)).contentType("application/json").body(body)
