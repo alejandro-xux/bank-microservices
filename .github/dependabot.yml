@@ -54,3 +54,29 @@ updates:
         patterns: ['*']
     commit-message:
       prefix: deps
+
+  # Las imágenes base de los Dockerfiles (BANK-97): el JDK y el JRE de los 6 servicios (fijados por tag + digest) y
+  # WireMock en el mainframe emulado. Todas en UN PR por semana: un parche de Ubuntu o del JRE cambia el digest de las
+  # mismas dos imágenes en los 6 Dockerfiles. La versión mayor de Java (21 → 25) no llega sola: es una migración
+  - package-ecosystem: docker
+    directories:
+      - /config-server
+      - /discovery-server
+      - /customers-service
+      - /accounts-service
+      - /notifications-service
+      - /api-gateway
+      - /infra/core-banking-mock
+    schedule:
+      interval: weekly
+      day: monday
+      timezone: America/Lima
+    open-pull-requests-limit: 2
+    groups:
+      imagenes:
+        patterns: ['*']
+    ignore:
+      - dependency-name: eclipse-temurin
+        update-types: ['version-update:semver-major']
+    commit-message:
+      prefix: deps

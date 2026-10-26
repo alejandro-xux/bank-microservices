@@ -194,7 +194,7 @@ pipeline {
                         (cd "$WORKSPACE" && jar xf scanner.zip && chmod +x sonar-scanner-*/bin/* sonar-scanner-*/jre/bin/*)
 
                         # En GitHub las clases llegan a sonar-inputs/<artifact>/; aquí el stash las deja en su módulo
-                        sed -i 's|sonar-inputs/\\*/classes|*/build/classes|; s|sonar-inputs/\\*/reports|*/build/reports|' sonar-project.properties
+                        sed -i 's|sonar-inputs/sonar-\\([a-z-]*\\)/|\\1/build/|' sonar-project.properties
                         modules="contracts customers-service accounts-service notifications-service api-gateway config-server discovery-server"
                         for m in $modules; do (cd "$m" && ./gradlew -q sonarLibraries --no-daemon); done
                         join() { for m in $modules; do tr ',' '\\n' < "$m/build/sonar/$1"; echo; done | grep . | sort -u | paste -sd, -; }
