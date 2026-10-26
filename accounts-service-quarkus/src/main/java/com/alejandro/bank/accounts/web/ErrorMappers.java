@@ -6,6 +6,10 @@ import com.alejandro.bank.accounts.exception.CustomerNotEligibleException;
 import com.alejandro.bank.accounts.exception.CustomersUnavailableException;
 import com.alejandro.bank.accounts.exception.IdempotencyKeyConflictException;
 import com.alejandro.bank.accounts.exception.InsufficientFundsException;
+import com.alejandro.bank.accounts.exception.SameAccountException;
+import com.alejandro.bank.accounts.exception.TransferFailedException;
+import com.alejandro.bank.accounts.exception.TransferNotFoundException;
+import com.alejandro.bank.accounts.exception.TransferRejectedException;
 import com.alejandro.bank.accounts.security.Problems;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.exc.MismatchedInputException;
@@ -79,6 +83,34 @@ public class ErrorMappers {
     @ServerExceptionMapper
     public Response customersUnavailable(CustomersUnavailableException ex, UriInfo uri) {
         return Problems.of(503, "Servicio no disponible", ex.getMessage(), uri).build();
+    }
+
+    @ServerExceptionMapper
+    public Response transferNotFound(TransferNotFoundException ex, UriInfo uri) {
+        return Problems.of(404, "Recurso no encontrado", ex.getMessage(), uri).build();
+    }
+
+    // 422: el core rechazó la transferencia y el dinero volvió al origen. Lleva el id, el estado ("transferStatus":
+    // "status" es el código HTTP del ProblemDetail) y el motivo, para consultarla después con GET /transfers/{id}
+    @ServerExceptionMapper
+    @SuppressWarnings("unchecked")
+    public Response transferFailed(TransferFailedException ex, UriInfo uri) {
+        Response response = Problems.of(422, "Transferencia rechazada por el core bancario", ex.getMessage(), uri).build();
+        Map<String, Object> body = (Map<String, Object>) response.getEntity();
+        body.put("transferId", ex.getTransfer().getId());
+        body.put("transferStatus", ex.getTransfer().getStatus());
+        body.put("reason", ex.getTransfer().getFailureReason());
+        return response;
+    }
+
+    @ServerExceptionMapper
+    public Response transferRejected(TransferRejectedException ex, UriInfo uri) {
+        return Problems.of(422, "Transferencia rechazada", ex.getMessage(), uri).build();
+    }
+
+    @ServerExceptionMapper
+    public Response sameAccount(SameAccountException ex, UriInfo uri) {
+        return Problems.of(400, "Datos inválidos", ex.getMessage(), uri).build();
     }
 
     // "open.request.customerId" → "customerId"

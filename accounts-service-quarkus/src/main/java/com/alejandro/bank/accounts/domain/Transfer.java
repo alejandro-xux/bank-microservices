@@ -13,8 +13,8 @@ import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.UUID;
 
-// Tabla transfer. Aquí se mapea para el historial de movimientos (la otra cuenta sale de la transferencia); la
-// SAGA que la crea y la resuelve llega en BANK-101. Las cuentas van por id, no como relación JPA
+// Tabla transfer, la misma que accounts-service. Las cuentas van por id y no como relación JPA: leer una transferencia
+// nunca dispara consultas extra a account. El estado solo cambia con TransferRepository.resolve (PENDING → X)
 @Entity
 @Table(name = "transfer")
 public class Transfer {
@@ -64,6 +64,29 @@ public class Transfer {
     protected Transfer() {
     }
 
+    // BANK-56: requestHash es la huella de los datos de la petición (origen, destino y monto)
+    public static Transfer create(UUID idempotencyKey, String requestHash, String requestedBy,
+                                  UUID fromAccountId, UUID toAccountId, BigDecimal amount, Currency currency,
+                                  long coreOperation) {
+        Transfer transfer = new Transfer();
+        transfer.idempotencyKey = idempotencyKey;
+        transfer.requestHash = requestHash;
+        transfer.requestedBy = requestedBy;
+        transfer.fromAccountId = fromAccountId;
+        transfer.toAccountId = toAccountId;
+        transfer.amount = amount;
+        transfer.currency = currency;
+        transfer.createdAt = Timestamps.now();
+        transfer.status = TransferStatus.PENDING;
+        transfer.coreOperation = coreOperation;
+        return transfer;
+    }
+
+    // Misma clave y misma huella = reintento de esta transferencia; misma clave y otra huella = 409
+    public boolean isSameRequest(String hash) {
+        return requestHash.equals(hash);
+    }
+
     public UUID getId() {
         return id;
     }
@@ -74,5 +97,41 @@ public class Transfer {
 
     public UUID getToAccountId() {
         return toAccountId;
+    }
+
+    public BigDecimal getAmount() {
+        return amount;
+    }
+
+    public Currency getCurrency() {
+        return currency;
+    }
+
+    public Instant getCreatedAt() {
+        return createdAt;
+    }
+
+    public TransferStatus getStatus() {
+        return status;
+    }
+
+    public String getFailureReason() {
+        return failureReason;
+    }
+
+    public Instant getResolvedAt() {
+        return resolvedAt;
+    }
+
+    public Long getCoreOperation() {
+        return coreOperation;
+    }
+
+    public String getRequestedBy() {
+        return requestedBy;
+    }
+
+    public boolean isNeedsReview() {
+        return needsReview;
     }
 }
