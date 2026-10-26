@@ -1,0 +1,36 @@
+[
+  {
+    "id": "c15a442d-5146-471e-8804-746f4b42253b",
+    "documentKey": "DNI#12345678",
+    "documentType": "DNI",
+    "documentNumber": "12345678",
+    "firstName": "Ana María",
+    "paternalLastName": "Quispe",
+    "maternalLastName": "Rojas",
+    "searchName": "ana maria quispe rojas",
+    "birthDate": "1995-04-12",
+    "emails": [{"address": "otro@mail.com", "type": "PERSONAL", "primary": true, "verified": false}],
+    "phones": [{"number": "+51999888777", "type": "MOBILE", "primary": true, "verified": false}],
+    "identityId": "4f8c2a1e-6b3d-4c9a-9e7f-2d5b8a1c3e01",
+    "status": "ACTIVE",
+    "createdAt": "2026-10-23T18:13:15.352109Z",
+    "updatedAt": "2026-10-24T13:00:04.938408Z"
+  },
+  {
+    "id": "08d38a3b-c398-48fb-be36-3d6a1dde7ad2",
+    "documentKey": "DNI#99999999",
+    "documentType": "DNI",
+    "documentNumber": "99999999",
+    "firstName": "Prueba",
+    "paternalLastName": "Concurrencia",
+    "maternalLastName": null,
+    "searchName": "prueba concurrencia",
+    "birthDate": null,
+    "emails": [{"address": "prueba@mail.com", "type": "PERSONAL", "primary": true, "verified": false}],
+    "phones": [{"number": "+51900000003", "type": "MOBILE", "primary": true, "verified": false}],
+    "identityId": null,
+    "status": "ACTIVE",
+    "createdAt": "2026-10-23T23:39:03.398853Z",
+    "updatedAt": "2026-10-23T23:41:07.310629Z"
+  }
+]

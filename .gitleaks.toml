@@ -2,3 +2,10 @@
 # es una decisión que se revisa en el PR: si el valor es un secreto real, no se agrega aquí, se ROTA (CONTRIBUTING)
 [extend]
 useDefault = true
+
+# Clave del emulador de Cosmos (BANK-96): es la misma para todos los emuladores, la publica Microsoft en su
+# documentación y no sirve contra un Cosmos real. La usan la CI (infra/docker-compose.ci.yml) y
+# infra/cosmos-emulator/init.py. Solo este valor exacto: cualquier otra clave de Cosmos se sigue detectando
+[[allowlists]]
+description = "Clave pública y fija del emulador de Cosmos"
+regexes = ['''C2y6yDjf5/R\+ob0N8A7Cgv30VRDJIWEHLM\+4QDU9DaOtpvXTGaw2DStuL8HEBjrUXXMTwrS8iwPYr\+lbwz5Y5Q==''']
