@@ -1,6 +1,7 @@
 package com.alejandro.bank.accounts.repository;
 
 import com.alejandro.bank.accounts.domain.Account;
+import com.alejandro.bank.accounts.domain.Currency;
 import io.quarkus.hibernate.orm.panache.PanacheRepositoryBase;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.persistence.LockModeType;
@@ -24,6 +25,28 @@ public class AccountRepository implements PanacheRepositoryBase<Account, UUID> {
         return getEntityManager()
                 .createQuery("select a.customerId from Account a where a.id = :id", String.class)
                 .setParameter("id", id)
+                .getResultStream().findFirst();
+    }
+
+    public Optional<Currency> findCurrencyById(UUID id) {
+        return getEntityManager()
+                .createQuery("select a.currency from Account a where a.id = :id", Currency.class)
+                .setParameter("id", id)
+                .getResultStream().findFirst();
+    }
+
+    // El número de cuenta, para rearmar el asiento de una transferencia pendiente (BANK-79)
+    public Optional<String> findNumberById(UUID id) {
+        return getEntityManager()
+                .createQuery("select a.number from Account a where a.id = :id", String.class)
+                .setParameter("id", id)
+                .getResultStream().findFirst();
+    }
+
+    public Optional<UUID> findIdByNumber(String number) {
+        return getEntityManager()
+                .createQuery("select a.id from Account a where a.number = :number", UUID.class)
+                .setParameter("number", number)
                 .getResultStream().findFirst();
     }
 

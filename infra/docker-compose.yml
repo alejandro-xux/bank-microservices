@@ -232,6 +232,7 @@ services:
     depends_on:
       <<: *base
       postgres: {condition: service_healthy}
+      core-banking-mock: {condition: service_healthy}
       customers-service: {condition: service_healthy}
       accounts-service: {condition: service_healthy}
 

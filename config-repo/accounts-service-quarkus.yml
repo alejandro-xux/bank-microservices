@@ -24,3 +24,13 @@ bank:
   customers:
     # Plazo de cada llamada a customers-service (como en accounts-service): pasado, 503
     deadline: ${CUSTOMERS_DEADLINE:2s}
+  # El mainframe emulado y el recuperador de la SAGA, con las mismas variables y valores que accounts-service
+  core-banking:
+    url: ${CORE_BANKING_URL:http://localhost:8089}
+    timeout: ${CORE_BANKING_TIMEOUT:2s}
+  saga:
+    recovery:
+      every: 5s
+      min-age: 10s
+      review-after: 30m
+      batch-size: 50

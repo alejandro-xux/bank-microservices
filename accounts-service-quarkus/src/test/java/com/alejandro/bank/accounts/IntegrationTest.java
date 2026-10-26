@@ -3,8 +3,14 @@ package com.alejandro.bank.accounts;
 import io.agroal.api.AgroalDataSource;
 import io.quarkus.test.common.QuarkusTestResource;
 import jakarta.inject.Inject;
+import org.junit.jupiter.api.BeforeEach;
 
+import java.io.IOException;
 import java.math.BigDecimal;
+import java.net.URI;
+import java.net.http.HttpClient;
+import java.net.http.HttpRequest;
+import java.net.http.HttpResponse;
 import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
@@ -18,6 +24,20 @@ public abstract class IntegrationTest {
 
     @Inject
     protected AgroalDataSource dataSource;
+
+    // El core recuerda los asientos (BANK-90): cada prueba empieza con un core que no recibió nada. El @BeforeEach de
+    // la clase base corre antes que el de cada prueba (JUnit lo garantiza entre clases, no dentro de una)
+    @BeforeEach
+    void coreBankingStartsEmpty() throws IOException, InterruptedException {
+        forgetCoreBanking();
+    }
+
+    protected static void forgetCoreBanking() throws IOException, InterruptedException {
+        try (HttpClient client = HttpClient.newHttpClient()) {
+            client.send(HttpRequest.newBuilder(URI.create(AccountsTestResource.coreBankingUrl() + "/__estado/borrar"))
+                    .POST(HttpRequest.BodyPublishers.noBody()).build(), HttpResponse.BodyHandlers.discarding());
+        }
+    }
 
     protected void emptyBank() {
         update("delete from outbox");
