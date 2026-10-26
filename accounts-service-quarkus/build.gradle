@@ -30,6 +30,7 @@ dependencies {
         exclude group: 'com.alejandro.bank', module: 'platform-bom'
     }
     implementation 'io.quarkus:quarkus-rest-jackson'
+    implementation 'io.quarkus:quarkus-hibernate-validator'
     implementation 'io.quarkus:quarkus-hibernate-orm-panache'
     implementation 'io.quarkus:quarkus-jdbc-postgresql'
     implementation 'io.quarkus:quarkus-oidc'
@@ -38,9 +39,12 @@ dependencies {
     implementation 'io.quarkus:quarkus-spring-cloud-config-client'
 
     testImplementation 'io.quarkus:quarkus-junit5'
-    testImplementation 'io.quarkus:quarkus-test-security-oidc'
+    // Tokens firmados de verdad en las pruebas: pasan por la misma validación OIDC y por el reenvío a customers
+    testImplementation 'io.quarkus:quarkus-smallrye-jwt-build'
     testImplementation 'io.quarkus:quarkus-jacoco'
     testImplementation 'io.rest-assured:rest-assured'
+    // Misma versión que accounts-service (la BOM de Quarkus no la fija)
+    testImplementation 'org.assertj:assertj-core:3.27.7'
     // El esquema en las pruebas: los mismos scripts de accounts-service. En producción solo Spring migra (D3)
     testImplementation 'io.quarkus:quarkus-flyway'
     testImplementation 'org.flywaydb:flyway-database-postgresql'

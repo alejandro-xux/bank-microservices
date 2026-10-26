@@ -1,6 +1,5 @@
 package com.alejandro.bank.accounts;
 
-import io.quarkus.test.common.QuarkusTestResource;
 import io.quarkus.test.junit.QuarkusTest;
 import org.junit.jupiter.api.Test;
 
@@ -10,8 +9,7 @@ import static org.hamcrest.Matchers.hasItem;
 
 // Las rutas que usan el HEALTHCHECK de la imagen y los scripts, sin token, y la readiness incluye la base
 @QuarkusTest
-@QuarkusTestResource(AccountsTestResource.class)
-class HealthTest {
+class HealthTest extends IntegrationTest {
 
     @Test
     void readinessIsUpAndChecksTheDatabase() {
