@@ -11,3 +11,8 @@ REVOKE ALL ON DATABASE accounts FROM PUBLIC;
 CREATE ROLE notifications LOGIN PASSWORD 'notifications-local';
 CREATE DATABASE notifications OWNER notifications;
 REVOKE ALL ON DATABASE notifications FROM PUBLIC;
+
+-- fraud-service (BANK-107): registra qué transferencias ya revisó, para no revisar dos veces
+CREATE ROLE fraud LOGIN PASSWORD 'fraud-local';
+CREATE DATABASE fraud OWNER fraud;
+REVOKE ALL ON DATABASE fraud FROM PUBLIC;

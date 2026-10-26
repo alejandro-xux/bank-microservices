@@ -1,14 +1,16 @@
 """Resumen de las pruebas de un módulo para el PR (BANK-83), leído de los XML de JUnit.
 
 Regla de CONTRIBUTING: el resultado se lee en los XML (cuántas pruebas, cuáles fallaron y con qué mensaje), no en
-"BUILD SUCCESSFUL". Uso: python3 test-summary.py <módulo>  (desde la raíz del repo; escribe Markdown a stdout)
+"BUILD SUCCESSFUL". Uso: python3 test-summary.py <módulo> [tarea]  (desde la raíz del repo; escribe Markdown a stdout).
+La tarea es la de Gradle que dejó los XML: test por defecto, testNative para las pruebas contra el binario (BANK-107)
 """
 import glob
 import sys
 import xml.etree.ElementTree as ET
 
 module = sys.argv[1]
-reports = glob.glob(f"{module}/build/test-results/test/*.xml")
+task = sys.argv[2] if len(sys.argv) > 2 else "test"
+reports = glob.glob(f"{module}/build/test-results/{task}/*.xml")
 
 tests = failed = skipped = 0
 seconds = 0.0
@@ -28,7 +30,7 @@ for path in reports:
             failures.append((case.get("classname").split(".")[-1], case.get("name"), message[0][:200] if message else ""))
 
 icon = "❌" if failed or not reports else "✅"
-print(f"### {icon} {module}")
+print(f"### {icon} {module}" + ("" if task == "test" else f" ({task})"))
 if not reports:
     # Sin XML: no compiló o no llegó a correr ninguna prueba. No es un "verde"
     print("No hay resultados de pruebas (¿falló la compilación?). Ver el log del paso Pruebas.")

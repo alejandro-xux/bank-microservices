@@ -54,16 +54,17 @@ ADMIN=$(token asesor asesor-local)
 wait_status "$GATEWAY/api/customers/no-existe" "$ADMIN" 404 120
 wait_status "$GATEWAY/api/accounts/00000000-0000-4000-8000-000000000000" "$ADMIN" 404 120
 
-step "Cuentas de prueba"
-ACCOUNTS_URL="$GATEWAY/api" "$ROOT/infra/seed-local.sh" --if-empty
-
 # Precalentamiento: la primera llamada de accounts a customers por gRPC, con el cliente de Cosmos en frío, pasa el
 # deadline de 2 s y responde 503 (BANK-95). Se repite hasta que el camino completo responda, como haría una
-# startupProbe en AKS; no es la prueba, solo deja el sistema en el estado en que lo usa un cliente
+# startupProbe en AKS; no es la prueba, solo deja el sistema en el estado en que lo usa un cliente. Va ANTES de abrir
+# las cuentas de prueba: abrirlas también pasa por customers, y con el camino frío el seed recibía el 503 (BANK-107)
 step "Precalentamiento"
 ANA=$(token ana ana-local)
 wait_status "$GATEWAY/api/customers/me" "$ANA" 200 90
 wait_status "$GATEWAY/api/accounts/me" "$ANA" 200 90
+
+step "Cuentas de prueba"
+ACCOUNTS_URL="$GATEWAY/api" "$ROOT/infra/seed-local.sh" --if-empty
 
 step "Karate"
 cd "$ROOT/tests/e2e"

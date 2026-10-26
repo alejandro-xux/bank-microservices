@@ -1,0 +1,75 @@
+// fraud-service (E14, BANK-107): revisa las transferencias completadas y avisa las sospechosas. Nace en Quarkus y
+// pensado para nativo (spike BANK-105): consume TransferCompleted de Kafka sin tocar accounts
+plugins {
+    id 'java'
+    id 'io.quarkus' version '3.40.1'
+}
+
+group = 'com.alejandro.bank'
+version = '0.0.1-SNAPSHOT'
+
+java {
+    toolchain {
+        languageVersion = JavaLanguageVersion.of(21)
+    }
+}
+
+repositories {
+    mavenCentral()
+}
+
+// Las rutas de los jars para Sonar
+apply from: '../gradle/sonar-libraries.gradle'
+
+// Cobertura combinada, como accounts-service-quarkus (BANK-106): quarkus-jacoco escribe el XML y suma lo que el agente
+// de Gradle mide en las pruebas unitarias simples (las reglas de fraude)
+apply plugin: 'jacoco'
+tasks.named('test') {
+    jacoco {
+        excludeClassLoaders = ['*QuarkusClassLoader']
+        destinationFile = layout.buildDirectory.file('jacoco-quarkus.exec').get().asFile
+    }
+    systemProperty 'java.util.logging.manager', 'org.jboss.logmanager.LogManager'
+}
+tasks.named('jacocoTestReport') {
+    enabled = false
+}
+
+dependencies {
+    // Quarkus 3.40.1 (LTS), el mismo que accounts-service-quarkus. Enforced: sus versiones mandan
+    implementation enforcedPlatform('io.quarkus.platform:quarkus-bom:3.40.1')
+    // contracts trae platform-bom (las versiones de Spring) como api: aquí no sirven
+    implementation('com.alejandro.bank:contracts') {
+        exclude group: 'com.alejandro.bank', module: 'platform-bom'
+    }
+    // Consumidor de Kafka con SmallRye Reactive Messaging (@Incoming): solo lee, lo propio de Quarkus para esto
+    implementation 'io.quarkus:quarkus-messaging-kafka'
+    // Su propia base (fraud): JDBC directo y Flyway, porque este servicio sí es dueño de su esquema
+    implementation 'io.quarkus:quarkus-agroal'
+    implementation 'io.quarkus:quarkus-jdbc-postgresql'
+    implementation 'io.quarkus:quarkus-flyway'
+    implementation 'org.flywaydb:flyway-database-postgresql'
+    implementation 'io.quarkus:quarkus-rest-jackson'
+    implementation 'io.quarkus:quarkus-oidc'
+    implementation 'io.quarkus:quarkus-smallrye-health'
+    implementation 'io.quarkus:quarkus-spring-cloud-config-client'
+
+    testImplementation 'io.quarkus:quarkus-junit5'
+    testImplementation 'io.quarkus:quarkus-smallrye-jwt-build'
+    testImplementation 'io.quarkus:quarkus-jacoco'
+    testImplementation 'io.rest-assured:rest-assured'
+    testImplementation 'org.assertj:assertj-core:3.27.7'
+    testImplementation 'org.awaitility:awaitility'
+    testImplementation 'org.testcontainers:testcontainers-postgresql'
+    testImplementation 'org.testcontainers:testcontainers-kafka'
+}
+
+// El mismo parche que accounts-service-quarkus (BANK-102): la BOM de Quarkus 3.40.1 trae lz4-java 1.11.1
+configurations.configureEach {
+    resolutionStrategy.eachDependency { details ->
+        if (details.requested.group == 'at.yawk.lz4' && details.requested.name == 'lz4-java') {
+            details.useVersion '1.11.4'
+            details.because 'CVE-2026-106451: la BOM de Quarkus 3.40.1 trae 1.11.1'
+        }
+    }
+}

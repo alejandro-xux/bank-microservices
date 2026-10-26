@@ -35,6 +35,7 @@ jobs:
           - accounts-service
           - accounts-service-quarkus
           - notifications-service
+          - fraud-service
           - api-gateway
           - config-server
           - discovery-server
@@ -110,7 +111,7 @@ jobs:
       # pasarían por una sola variable de entorno, que Linux corta en 128 KB
       - name: Dependencias de cada módulo
         run: |
-          modules="contracts customers-service accounts-service accounts-service-quarkus notifications-service api-gateway config-server discovery-server"
+          modules="contracts customers-service accounts-service accounts-service-quarkus notifications-service fraud-service api-gateway config-server discovery-server"
           for m in $modules; do (cd "$m" && ./gradlew -q sonarLibraries --no-daemon); done
           # El echo cierra la última ruta de cada módulo: sin él se pegaba con la primera del siguiente
           join() { for m in $modules; do tr ',' '\n' < "$m/build/sonar/$1"; echo; done | grep . | sort -u | paste -sd, -; }

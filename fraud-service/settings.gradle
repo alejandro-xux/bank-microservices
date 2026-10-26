@@ -1,0 +1,12 @@
+pluginManagement {
+    repositories {
+        mavenCentral()
+        gradlePluginPortal()
+    }
+}
+
+rootProject.name = 'fraud-service'
+// contracts publica platform-bom (Spring) como api: se incluye para poder resolverlo y excluirlo en build.gradle
+includeBuild('../platform-bom')
+// Los eventos de las transferencias (TransferCompleted) y el de este servicio (FraudSuspected)
+includeBuild('../contracts')

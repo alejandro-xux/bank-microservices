@@ -35,7 +35,7 @@ pipeline {
                     axis {
                         name 'MODULE'
                         values 'contracts', 'customers-service', 'accounts-service', 'accounts-service-quarkus',
-                                'notifications-service', 'api-gateway', 'config-server', 'discovery-server'
+                                'notifications-service', 'fraud-service', 'api-gateway', 'config-server', 'discovery-server'
                     }
                 }
                 stages {
@@ -179,7 +179,7 @@ pipeline {
             steps {
                 script {
                     ['contracts', 'customers-service', 'accounts-service', 'accounts-service-quarkus', 'notifications-service',
-                     'api-gateway', 'config-server', 'discovery-server'].each { m -> unstash "sonar-${m}" }
+                     'fraud-service', 'api-gateway', 'config-server', 'discovery-server'].each { m -> unstash "sonar-${m}" }
                 }
                 withCredentials([string(credentialsId: 'sonar-token', variable: 'SONAR_TOKEN')]) {
                     sh '''
@@ -195,7 +195,7 @@ pipeline {
 
                         # En GitHub las clases llegan a sonar-inputs/<artifact>/; aquí el stash las deja en su módulo
                         sed -i 's|sonar-inputs/sonar-\\([a-z-]*\\)/|\\1/build/|' sonar-project.properties
-                        modules="contracts customers-service accounts-service accounts-service-quarkus notifications-service api-gateway config-server discovery-server"
+                        modules="contracts customers-service accounts-service accounts-service-quarkus notifications-service fraud-service api-gateway config-server discovery-server"
                         for m in $modules; do (cd "$m" && ./gradlew -q sonarLibraries --no-daemon); done
                         join() { for m in $modules; do tr ',' '\\n' < "$m/build/sonar/$1"; echo; done | grep . | sort -u | paste -sd, -; }
                         echo "sonar.java.libraries=$(join libraries.txt)" >> sonar-project.properties

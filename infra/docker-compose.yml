@@ -250,6 +250,27 @@ services:
       mailpit: {condition: service_healthy}
       customers-service: {condition: service_healthy}
 
+  # fraud-service (BANK-107): binario nativo. Va en su propio perfil, "native", y no en "app": la imagen tarda ~8 min y
+  # pide ~6 GB a Docker, y no hace falta para el resto del sistema (solo lee bank.transfers.v1). Se levanta aparte:
+  #   docker compose -f infra/docker-compose.yml --profile native up -d --build --wait fraud-service
+  # El config-server es el de los contenedores (--containers); con los servicios en bootRun, el del host:
+  #   FRAUD_CONFIG_SERVER_URL=http://host.docker.internal:8888 docker compose ... --profile native up -d fraud-service
+  fraud-service:
+    <<: *servicio
+    profiles: [native]
+    build: {context: .., dockerfile: fraud-service/Dockerfile}
+    image: bank-fraud-service:local
+    container_name: bank-fraud-service
+    # Sin JVM: el binario arranca en décimas de segundo y usa una fracción de la memoria (spike BANK-105, N4)
+    mem_limit: 256m
+    environment:
+      <<: *entorno
+      CONFIG_SERVER_URL: ${FRAUD_CONFIG_SERVER_URL:-http://config-server:8888}
+      AUTH_JWKS_URI: http://keycloak:8080/realms/bank/protocol/openid-connect/certs
+    depends_on:
+      postgres: {condition: service_healthy}
+      kafka-init: {condition: service_completed_successfully}
+
   api-gateway:
     <<: *servicio
     build: {context: .., dockerfile: api-gateway/Dockerfile}
