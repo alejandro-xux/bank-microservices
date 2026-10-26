@@ -25,7 +25,8 @@ public record AccountResponse(
         Instant createdAt
 ) {
     public static AccountResponse from(Account account) {
-        return new AccountResponse(account.id, account.number, account.customerId, account.type, account.currency,
-                account.balance.setScale(2, RoundingMode.UNNECESSARY), account.status, account.createdAt);
+        return new AccountResponse(account.getId(), account.getNumber(), account.getCustomerId(), account.getType(),
+                account.getCurrency(), account.getBalance().setScale(2, RoundingMode.UNNECESSARY), account.getStatus(),
+                account.getCreatedAt());
     }
 }

@@ -67,6 +67,7 @@ Unos 100 MB de cada una son el JRE y Ubuntu, que se comparten: en un registro o 
 La migración de accounts-service a Quarkus, al lado de la versión Spring, que no se toca (estrategia *strangler*). Las dos usan la misma base `accounts`, la misma API, los mismos eventos y el mismo `.proto`. Solo Spring aplica las migraciones de Flyway; Quarkus valida al arrancar que sus entidades coincidan con las tablas, y si no coinciden no arranca.
 
 - Puerto **8084**. Corre en el modo `--containers` (perfil `app`), sin recibir tráfico del gateway hasta el canary de BANK-104.
+- Endpoints migrados (BANK-100): `/accounts/me`, `/accounts/{id}`, `/accounts?customerId=`, `POST /accounts`, `POST /accounts/{id}/deposits` y `/accounts/{id}/movements`, con los mismos códigos, JSON y errores. Un depósito hecho por una versión y reintentado por la otra con la misma `Idempotency-Key` devuelve el mismo movimiento.
 - Configuración: `accounts-service-quarkus/src/main/resources/application.properties` (lo que se fija al compilar) y `config-repo/accounts-service-quarkus.yml` (lo de cada entorno, con las mismas variables que accounts-service).
 - Pruebas: `cd accounts-service-quarkus && ./gradlew test` (`@QuarkusTest` con PostgreSQL de Testcontainers y un customers falso por gRPC). La cobertura la mide `quarkus-jacoco`.
 - Imagen: `infra/build-images.sh accounts-service-quarkus` (144 MB comprimida, frente a 211 MB de la versión Spring).

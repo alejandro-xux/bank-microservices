@@ -20,3 +20,7 @@ quarkus:
       customers:
         host: ${CUSTOMERS_GRPC_HOST:localhost}
         port: ${CUSTOMERS_GRPC_PORT:9091}
+bank:
+  customers:
+    # Plazo de cada llamada a customers-service (como en accounts-service): pasado, 503
+    deadline: ${CUSTOMERS_DEADLINE:2s}

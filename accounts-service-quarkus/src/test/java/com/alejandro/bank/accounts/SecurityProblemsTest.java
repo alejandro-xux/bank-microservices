@@ -1,8 +1,6 @@
 package com.alejandro.bank.accounts;
 
-import io.quarkus.test.common.QuarkusTestResource;
 import io.quarkus.test.junit.QuarkusTest;
-import io.quarkus.test.security.TestSecurity;
 import org.junit.jupiter.api.Test;
 
 import static io.restassured.RestAssured.given;
@@ -10,8 +8,7 @@ import static org.hamcrest.Matchers.equalTo;
 
 // 401 y 403 con el mismo ProblemDetail que accounts-service (los mismos textos y el mismo instance)
 @QuarkusTest
-@QuarkusTestResource(AccountsTestResource.class)
-class SecurityProblemsTest {
+class SecurityProblemsTest extends IntegrationTest {
 
     @Test
     void withoutTokenIs401ProblemDetail() {
@@ -26,9 +23,15 @@ class SecurityProblemsTest {
     }
 
     @Test
-    @TestSecurity(user = "asesor", roles = "ADMIN")
+    void aTokenNotSignedByTheIssuerIs401() {
+        given().header("Authorization", "Bearer eyJhbGciOiJSUzI1NiJ9.eyJzdWIiOiJ4In0.firma").when().get("/accounts/me").then()
+                .statusCode(401)
+                .body("title", equalTo("No autenticado"));
+    }
+
+    @Test
     void wrongRoleIs403ProblemDetail() {
-        given().when().get("/accounts/me").then()
+        given().header("Authorization", Tokens.admin()).when().get("/accounts/me").then()
                 .statusCode(403)
                 .contentType("application/problem+json")
                 .body("title", equalTo("Acceso denegado"))
