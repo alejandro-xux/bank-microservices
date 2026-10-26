@@ -203,9 +203,70 @@ jobs:
   # propósito si la matriz no terminó en success: un job saltado o cancelado cuenta como "pasó" para GitHub
   # Desde BANK-84 también exige el Quality Gate: Sonar tiene que haber pasado, salvo en un PR de un fork o de
   # Dependabot, donde no puede correr (no hay secrets) y queda "skipped". Desde BANK-85, también gitleaks; desde BANK-86, buf
+  # Imágenes de los servicios (BANK-95): se construyen en cada PR (no se publican: eso llega con ACR en E12) y no pasan
+  # si el Dockerfile tiene un problema (hadolint), si la imagen corre como root, no tiene HEALTHCHECK o lleva una
+  # credencial (infra/build-images.sh), o si trae una vulnerabilidad CRITICAL o HIGH que ya tiene arreglo (Trivy, D7)
+  images:
+    name: imagen ${{ matrix.service }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        service:
+          - config-server
+          - discovery-server
+          - customers-service
+          - accounts-service
+          - notifications-service
+          - api-gateway
+    env:
+      HADOLINT_VERSION: 2.15.1
+      HADOLINT_SHA256: c7187db94eeeeca956519a6af171adc31453941a1e777961f6e680f697c8c507
+      TRIVY_VERSION: 0.75.0
+      TRIVY_SHA256: c6e65abddb348e25f10549df887045629cf28cc72453cd1c63acb717316b3f3f
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      # hadolint con versión y checksum fijos, como gitleaks y buf
+      - name: hadolint
+        run: |
+          curl -sSfL -o "$RUNNER_TEMP/hadolint" \
+            "https://github.com/hadolint/hadolint/releases/download/v${HADOLINT_VERSION}/hadolint-linux-x86_64"
+          echo "${HADOLINT_SHA256}  $RUNNER_TEMP/hadolint" | sha256sum -c -
+          chmod +x "$RUNNER_TEMP/hadolint"
+          "$RUNNER_TEMP/hadolint" --config .hadolint.yaml "${{ matrix.service }}/Dockerfile"
+
+      - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
+
+      # Las capas quedan en la caché de Actions, una por servicio. Como la de Gradle, solo la escribe main y los PR la
+      # leen. La caché de Gradle de dentro del Dockerfile (--mount=type=cache) no se guarda entre corridas (BANK-91 C8)
+      - name: Construir
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
+        with:
+          context: .
+          file: ${{ matrix.service }}/Dockerfile
+          tags: bank-${{ matrix.service }}:local
+          load: true
+          push: false
+          cache-from: type=gha,scope=${{ matrix.service }}
+          cache-to: ${{ github.event_name == 'push' && format('type=gha,mode=max,scope={0}', matrix.service) || '' }}
+
+      - name: Usuario, HEALTHCHECK y credenciales
+        run: infra/build-images.sh --check-only "${{ matrix.service }}"
+
+      - name: Trivy
+        run: |
+          curl -sSfL -o "$RUNNER_TEMP/trivy.tar.gz" \
+            "https://github.com/aquasecurity/trivy/releases/download/v${TRIVY_VERSION}/trivy_${TRIVY_VERSION}_Linux-64bit.tar.gz"
+          echo "${TRIVY_SHA256}  $RUNNER_TEMP/trivy.tar.gz" | sha256sum -c -
+          tar -xzf "$RUNNER_TEMP/trivy.tar.gz" -C "$RUNNER_TEMP" trivy
+          set -o pipefail
+          TRIVY_BIN="$RUNNER_TEMP/trivy" infra/scan-images.sh "bank-${{ matrix.service }}:local" | tee -a "$GITHUB_STEP_SUMMARY"
+
   ci-ok:
     name: ci-ok
-    needs: [test, sonar, gitleaks, buf]
+    needs: [test, sonar, gitleaks, buf, images]
     if: always()
     runs-on: ubuntu-latest
     timeout-minutes: 5
@@ -216,10 +277,12 @@ jobs:
           SONAR: ${{ needs.sonar.result }}
           GITLEAKS: ${{ needs.gitleaks.result }}
           BUF: ${{ needs.buf.result }}
+          IMAGES: ${{ needs.images.result }}
           SONAR_CANNOT_RUN: ${{ github.actor == 'dependabot[bot]' || (github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository) }}
         run: |
-          echo "Pruebas: $TESTS · Sonar: $SONAR · Sonar no puede correr aquí: $SONAR_CANNOT_RUN · gitleaks: $GITLEAKS · buf: $BUF"
+          echo "Pruebas: $TESTS · Sonar: $SONAR · Sonar no puede correr aquí: $SONAR_CANNOT_RUN · gitleaks: $GITLEAKS · buf: $BUF · imágenes: $IMAGES"
           test "$TESTS" = "success"
           test "$GITLEAKS" = "success"
           test "$BUF" = "success"
+          test "$IMAGES" = "success"
           test "$SONAR" = "success" || { test "$SONAR" = "skipped" && test "$SONAR_CANNOT_RUN" = "true"; }

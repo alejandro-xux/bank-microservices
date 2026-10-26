@@ -1,0 +1,5 @@
+# hadolint revisa los Dockerfiles de los servicios en la CI (BANK-95): buenas prácticas (USER, versiones fijas,
+# WORKDIR, shell) y los errores de shell de cada RUN (ShellCheck). Cualquier hallazgo, también un aviso, hace fallar
+# el job. Una regla que no aplique va en "ignored" con su motivo; hoy no hay ninguna
+failure-threshold: info
+ignored: []

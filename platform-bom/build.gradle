@@ -33,5 +33,18 @@ dependencies {
 	constraints {
 		api 'org.springdoc:springdoc-openapi-starter-webflux-ui:3.0.3'
 		api 'org.springdoc:springdoc-openapi-starter-webmvc-ui:3.0.3'
+
+		// Parches de seguridad que encontró Trivy en las imágenes (BANK-95, spike BANK-91 C3): CRITICAL y HIGH con
+		// arreglo. Quitar cada uno cuando el BOM que lo trae ya lo incluya (Tomcat: Spring Boot 4.0.9, PR #64)
+		api 'org.apache.tomcat.embed:tomcat-embed-core:11.0.27'
+		api 'org.apache.tomcat.embed:tomcat-embed-el:11.0.27'
+		api 'org.apache.tomcat.embed:tomcat-embed-websocket:11.0.27'
+		// Panel web de Eureka (discovery-server)
+		api 'org.freemarker:freemarker:2.3.35'
+		// Compresión del cliente de Kafka (accounts, notifications)
+		api 'at.yawk.lz4:lz4-java:1.11.4'
+		// Cliente HTTP de Spring Cloud (Eureka, config) y de Azure
+		api 'org.apache.httpcomponents.core5:httpcore5:5.4.3'
+		api 'org.apache.httpcomponents.core5:httpcore5-h2:5.4.3'
 	}
 }

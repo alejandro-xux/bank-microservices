@@ -51,4 +51,13 @@ Reglas que salieron de pruebas que fallaban a veces (Sprints 8 y 9). Valen para 
   2. Sacarlo del código y pasarlo a una variable de entorno o a un secret.
   3. Si ya está en el historial, borrarlo de ahí (reescribir la historia) es una decisión aparte, que no reemplaza la rotación.
   4. Solo si el valor **no** es un secreto (un ejemplo, un valor de prueba local que ya es público), se agrega una excepción en `.gitleaks.toml` con el motivo. Hoy no hay ninguna: las credenciales locales (`ana-local`, `asesor-local`…) no se parecen a un secreto y gitleaks no las marca.
+- **Imágenes** (job `images`, parte de `ci-ok`, BANK-95). Cada PR construye las 6 imágenes y las revisa.
+  - **hadolint** revisa los Dockerfiles. Cualquier aviso falla. Una regla que no aplique va en `.hadolint.yaml` con su motivo.
+  - **`infra/build-images.sh --check-only`** revisa cada imagen: usuario `10001`, HEALTHCHECK y ninguna credencial dentro.
+  - **Trivy** (`infra/scan-images.sh`) bloquea cualquier vulnerabilidad CRITICAL o HIGH que ya tenga arreglo. Las que no tienen arreglo aparecen en el resumen y no bloquean.
+- **Si Trivy bloquea:**
+  1. En el resumen del job está el paquete, la versión instalada y la que lo arregla.
+  2. Si es del sistema operativo, se sube la imagen base: el digest en los Dockerfiles.
+  3. Si es una librería, se fija la versión arreglada en `platform-bom` (como Tomcat, httpcore5 o lz4-java en BANK-95), con el comentario de cuándo quitarla, y se corren todas las pruebas.
+  4. Solo si de verdad no aplica o no se puede subir todavía, va una línea en `.trivyignore`, con el motivo y una fecha de revisión. Una excepción sin motivo no se acepta en la revisión.
 - **Dependabot** abre los lunes, como máximo, un PR con los parches de Gradle, otro con las versiones menores, uno por cada versión mayor y uno con las actions. Spring Boot, Spring Cloud y Spring gRPC no suben de versión menor ni mayor por Dependabot: van juntos y se migran con un ticket. En la primera corrida, Boot 4.1 llegó agrupado con los parches y no compilaba. Pasa por la CI como cualquier PR; Sonar no corre porque Dependabot no recibe secrets. Una versión mayor se revisa con las notas del release antes de mergear.

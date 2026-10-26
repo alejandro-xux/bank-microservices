@@ -21,6 +21,8 @@ pipeline {
         GITLEAKS_VERSION = '8.30.1'
         BUF_VERSION = '1.73.0'
         SCANNER_VERSION = '8.1.0.6389'
+        HADOLINT_VERSION = '2.15.1'
+        TRIVY_VERSION = '0.75.0'
     }
 
     stages {
@@ -115,6 +117,52 @@ pipeline {
                             echo "Comparando contracts con $base"
                             "$WORKSPACE/buf" breaking contracts --against ".git#ref=$base,subdir=contracts"
                         '''
+                    }
+                }
+            }
+        }
+
+        // Imágenes de los servicios (BANK-95), como el job images de GitHub: hadolint, construir, revisar usuario,
+        // HEALTHCHECK y credenciales (infra/build-images.sh) y Trivy (infra/scan-images.sh). El agente necesita Docker
+        stage('Imágenes') {
+            matrix {
+                agent any
+                axes {
+                    axis {
+                        name 'SERVICE'
+                        values 'config-server', 'discovery-server', 'customers-service', 'accounts-service',
+                                'notifications-service', 'api-gateway'
+                    }
+                }
+                stages {
+                    stage('imagen') {
+                        options {
+                            timeout(time: 20, unit: 'MINUTES')
+                        }
+                        steps {
+                            sh '''
+                                arch=$(uname -m)
+                                if [ "$arch" = "aarch64" ] || [ "$arch" = "arm64" ]; then
+                                  hadolint=hadolint-linux-arm64; hsum=f6198ef8090f404dbb771abfee086eb8c48ac177f30da7fd3510aca35b344b5d
+                                  trivy=trivy_${TRIVY_VERSION}_Linux-ARM64.tar.gz; tsum=a1ee9f6ffb7d112b64ff726a2a0717c21175c1114361391f4a132956751a13b3
+                                else
+                                  hadolint=hadolint-linux-x86_64; hsum=c7187db94eeeeca956519a6af171adc31453941a1e777961f6e680f697c8c507
+                                  trivy=trivy_${TRIVY_VERSION}_Linux-64bit.tar.gz; tsum=c6e65abddb348e25f10549df887045629cf28cc72453cd1c63acb717316b3f3f
+                                fi
+                                curl -sSfL -o "$WORKSPACE/hadolint" "https://github.com/hadolint/hadolint/releases/download/v${HADOLINT_VERSION}/$hadolint"
+                                echo "$hsum  $WORKSPACE/hadolint" | sha256sum -c -
+                                chmod +x "$WORKSPACE/hadolint"
+                                "$WORKSPACE/hadolint" --config .hadolint.yaml "$SERVICE/Dockerfile"
+
+                                DOCKER_BUILDKIT=1 docker build -f "$SERVICE/Dockerfile" -t "bank-$SERVICE:local" .
+                                infra/build-images.sh --check-only "$SERVICE"
+
+                                curl -sSfL -o "$WORKSPACE/trivy.tar.gz" "https://github.com/aquasecurity/trivy/releases/download/v${TRIVY_VERSION}/$trivy"
+                                echo "$tsum  $WORKSPACE/trivy.tar.gz" | sha256sum -c -
+                                tar -xzf "$WORKSPACE/trivy.tar.gz" -C "$WORKSPACE" trivy
+                                TRIVY_BIN="$WORKSPACE/trivy" infra/scan-images.sh "bank-$SERVICE:local"
+                            '''
+                        }
                     }
                 }
             }

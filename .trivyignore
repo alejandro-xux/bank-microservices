@@ -1,0 +1,5 @@
+# Vulnerabilidades aceptadas a propósito en las imágenes (BANK-95). Trivy bloquea la CI con cualquier CRITICAL o HIGH
+# que ya tenga arreglo; lo normal es subir la base o la dependencia (platform-bom), no agregar una línea aquí.
+# Si hace falta, una línea por CVE con su motivo y la fecha en que se vuelve a revisar:
+#   CVE-AAAA-NNNNN   # motivo (por qué no aplica o por qué no se puede subir todavía) · revisar: AAAA-MM-DD
+# Hoy no hay ninguna
