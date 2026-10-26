@@ -24,6 +24,28 @@ infra/stop-local.sh     # apaga los servicios (con --all también los contenedor
 
 Espera a que cada pieza esté sana antes de seguir, salta las que ya están corriendo y termina cuando el gateway ya enruta a customers-service (~1 minuto desde cero). Los logs de cada servicio quedan en `.local/logs/`. Las secciones siguientes explican cada pieza por separado.
 
+### Imágenes de los servicios (BANK-92)
+Cada servicio tiene su `Dockerfile` en dos etapas: compila con el JDK 21 y Gradle, y la imagen final lleva solo el JRE 21 (`eclipse-temurin:21-jre-noble`, elegida en el spike BANK-91) y la aplicación separada en capas. Se construyen desde la raíz del repo, porque cada servicio compila `platform-bom` y `contracts` con `includeBuild`.
+
+```bash
+infra/build-images.sh                      # las 6 imágenes (bank-<servicio>:local) y su revisión
+infra/build-images.sh accounts-service     # solo una
+docker build -f accounts-service/Dockerfile -t bank-accounts-service:local .   # lo mismo, a mano
+```
+
+El script revisa cada imagen y falla si algo no cumple: corre con el usuario `10001` (no root), tiene `HEALTHCHECK` contra el actuator y no lleva credenciales en sus variables ni en sus capas (Cosmos y el secreto de notifications llegan al correr, por variables). La caché de Gradle queda en BuildKit: sin cambios una imagen se reconstruye en ~1 s, y con una clase cambiada en ~11 s, porque solo cambia la última capa (la aplicación, cientos de kB) y las dependencias (~130 MB) se reutilizan. La primera vez tarda unos 4 minutos, porque baja Gradle y las dependencias.
+
+| Imagen | Comprimida |
+|---|---|
+| `bank-config-server:local` | 136 MB |
+| `bank-discovery-server:local` | 149 MB |
+| `bank-api-gateway:local` | 166 MB |
+| `bank-notifications-service:local` | 183 MB |
+| `bank-customers-service:local` | 188 MB |
+| `bank-accounts-service:local` | 211 MB |
+
+Unos 100 MB de cada una son el JRE y Ubuntu, que se comparten: en un registro o un nodo se guardan una sola vez.
+
 ### Datos de prueba (BANK-75)
 Si la base de accounts está vacía (primer arranque o después de `--all`), `start-local.sh` corre `infra/seed-local.sh`, que abre por la API, como un asesor, las cuentas con las que probamos:
 

@@ -1,0 +1,17 @@
+# Contexto de las imágenes de los servicios (BANK-92): se construyen desde la raíz porque cada servicio compila
+# platform-bom y contracts con includeBuild. Se manda a Docker solo lo que hace falta para compilar; nada de
+# build/, .git/, .local/ (logs) ni archivos de entorno
+*
+!gradle
+!platform-bom
+!contracts
+!config-server
+!discovery-server
+!customers-service
+!accounts-service
+!notifications-service
+!api-gateway
+**/build
+**/.gradle
+**/*.env
+**/.DS_Store
