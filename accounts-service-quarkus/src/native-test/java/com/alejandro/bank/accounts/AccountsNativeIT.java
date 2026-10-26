@@ -42,6 +42,9 @@ class AccountsNativeIT {
 
         given().header("Authorization", Tokens.customer(Tokens.ANA_OID)).when().get("/accounts/" + ana).then()
                 .statusCode(200).body("balance", equalTo("70.00"));
+        // El estado de cuenta: el depósito, el débito de la transferencia y el débito y la reversa del .13
+        given().header("Authorization", Tokens.customer(Tokens.ANA_OID)).when().get("/accounts/" + ana + "/movements")
+                .then().statusCode(200).body("content.size()", equalTo(4));
     }
 
     @Test
