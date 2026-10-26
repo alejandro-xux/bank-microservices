@@ -1,0 +1,47 @@
+// Eventos de fraude (E14, BANK-108). Los publica fraud-service en el topic bank.fraud.v1 cuando una transferencia
+// completada dispara alguna regla. Por ahora nadie los consume: quedan para un servicio de casos o para avisar al
+// cliente. Mismas reglas que transfer_events.proto: lo que importa en el binario son los NÚMEROS de campo
+// (contracts/README.md), y un cambio incompatible va en un paquete y un topic nuevos (v2).
+syntax = "proto3";
+
+package bank.fraud.v1;
+
+import "google/protobuf/timestamp.proto";
+
+option java_multiple_files = true;
+option java_package = "com.alejandro.bank.contracts.fraud.v1";
+
+// Una transferencia completada que parece fraude. No la detiene (el dinero ya se movió): avisa. Sin datos
+// personales, como los eventos de transferencias: ids, monto y moneda. Quien necesite al cliente lo pide al dueño
+// del dato (customers-service)
+message FraudSuspected {
+  // Id del aviso. Se deriva del evento de la transferencia (siempre el mismo para el mismo evento): si el aviso
+  // llega dos veces, el consumidor lo reconoce como el mismo
+  string event_id = 1;
+  // El TransferCompleted que se revisó (bank.transfers.v1)
+  string transfer_event_id = 2;
+  string transfer_id = 3;
+
+  string from_account_id = 4;
+  string to_account_id = 5;
+
+  // Monto en texto con 2 decimales y moneda ISO 4217, como en TransferCompleted
+  string amount = 6;
+  string currency = 7;
+
+  // Las reglas que dispararon (al menos una)
+  repeated FraudRule rules = 8;
+
+  google.protobuf.Timestamp detected_at = 9;
+}
+
+// Por qué una transferencia es sospechosa. Un valor nuevo no rompe a un consumidor viejo: le llega UNRECOGNIZED
+enum FraudRule {
+  FRAUD_RULE_UNSPECIFIED = 0;
+  // Monto alto: por encima del umbral de su moneda, o varias veces el promedio de la cuenta
+  FRAUD_RULE_HIGH_AMOUNT = 1;
+  // Frecuencia: demasiadas transferencias desde la misma cuenta en pocos minutos
+  FRAUD_RULE_VELOCITY = 2;
+  // Un destino al que la cuenta nunca había transferido, con un monto alto
+  FRAUD_RULE_NEW_DESTINATION_HIGH_AMOUNT = 3;
+}

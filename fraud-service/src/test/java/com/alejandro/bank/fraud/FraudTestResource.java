@@ -1,5 +1,6 @@
 package com.alejandro.bank.fraud;
 
+import com.alejandro.bank.contracts.fraud.v1.FraudTopics;
 import com.alejandro.bank.contracts.transfers.v1.TransferTopics;
 import io.quarkus.test.common.QuarkusTestResourceLifecycleManager;
 import org.apache.kafka.clients.admin.AdminClient;
@@ -18,13 +19,13 @@ import java.util.Map;
 // Lo que necesitan las pruebas, una vez para toda la suite:
 // - PostgreSQL (la misma imagen que docker-compose): la base de fraude, con el esquema de Flyway
 // - Kafka como el del compose: sin creación automática de topics, así que se crean aquí con las mismas particiones que
-//   infra/kafka/create-topics.sh (el de transferencias y la DLT de fraude)
+//   infra/kafka/create-topics.sh (el de transferencias, el de avisos de fraude y la DLT de fraude)
 // - una llave RSA propia para firmar los tokens (Tokens), validados con la misma configuración OIDC de producción
 // Las pruebas miran la base y Kafka desde fuera (JDBC y clientes propios), sin @Inject: así las mismas clases corren
 // contra el binario nativo con @QuarkusIntegrationTest, que no inyecta nada
 public class FraudTestResource implements QuarkusTestResourceLifecycleManager {
 
-    public static final String FRAUD_DEAD_LETTER_TOPIC = "bank.fraud.v1.DLT";
+    public static final String FRAUD_DEAD_LETTER_TOPIC = FraudTopics.DEAD_LETTER_TOPIC;
     static final String ISSUER = "https://issuer.pruebas";
     static final PostgreSQLContainer POSTGRES = new PostgreSQLContainer("postgres:17.11-alpine");
     static final KafkaContainer KAFKA = new KafkaContainer("apache/kafka:4.3.1")
@@ -74,6 +75,7 @@ public class FraudTestResource implements QuarkusTestResourceLifecycleManager {
     private static void createTopics() {
         try (AdminClient admin = AdminClient.create(Map.of(AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG, KAFKA.getBootstrapServers()))) {
             admin.createTopics(List.of(new NewTopic(TransferTopics.TOPIC, 3, (short) 1),
+                    new NewTopic(FraudTopics.TOPIC, 3, (short) 1),
                     new NewTopic(FRAUD_DEAD_LETTER_TOPIC, 3, (short) 1))).all().get();
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();

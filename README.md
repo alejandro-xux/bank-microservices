@@ -105,7 +105,25 @@ El gateway tiene dos rutas para `/api/accounts/**` y `/api/transfers/**` en el m
 - **Logs de las dos versiones:** `docker logs bank-accounts-service-quarkus` / `bank-accounts-service`.
 
 ### fraud-service (E14, BANK-107)
-Servicio nuevo, escrito en Quarkus desde el principio y compilado a **binario nativo** (spike BANK-105). Lee las transferencias completadas de `bank.transfers.v1` con su propio grupo de consumidores, así no le quita eventos a notifications-service, y no toca accounts. Las reglas de fraude y el aviso de una transferencia sospechosa (`bank.fraud.v1`) llegan en BANK-108.
+Servicio nuevo, escrito en Quarkus desde el principio y compilado a **binario nativo** (spike BANK-105). Lee las transferencias completadas de `bank.transfers.v1` con su propio grupo de consumidores, así no le quita eventos a notifications-service, y no toca accounts.
+
+**Reglas de fraude (BANK-108).** Avisan, no frenan: el dinero ya se movió. Los umbrales están en `fraud.rules.*` (`application.properties`, que se cambian por entorno en `config-repo/fraud-service.yml`):
+
+| Regla | Dispara cuando (valores por defecto) |
+|---|---|
+| `HIGH_AMOUNT` | 10 000 PEN o 3 000 USD, o desde 1 000 PEN / 300 USD si pasa 5 veces el promedio de la cuenta (con al menos 3 transferencias antes) |
+| `VELOCITY` | más de 5 transferencias desde la misma cuenta en 10 minutos, contando la hora del evento |
+| `NEW_DESTINATION_HIGH_AMOUNT` | desde 2 000 PEN o 600 USD a un destino al que la cuenta nunca transfirió |
+
+- Cada evaluación queda en `fraud_review`: transferencia, reglas y resultado. Es también la historia de la cuenta que usan las reglas, y empieza con BANK-108.
+- Una sospechosa publica `FraudSuspected` en `bank.fraud.v1` (`contracts/src/main/proto/fraud_events.proto`), sin datos personales y con un id derivado del evento: un aviso repetido se reconoce como el mismo.
+- El mismo evento dos veces no da dos avisos: `processed_event` lo descarta antes de evaluar.
+- Las reglas son dominio puro (`fraud-service/.../rules`) y se prueban sin Quarkus.
+
+```bash
+# Los avisos
+docker exec bank-postgres psql -U fraud -d fraud -c "SELECT reviewed_at, transfer_id, amount, currency, rules FROM fraud_review WHERE suspicious ORDER BY reviewed_at DESC LIMIT 10"
+```
 
 - Puerto **8085**, sin API pública: solo el health está abierto, el resto pide token.
 - Base propia `fraud`. Este servicio sí aplica sus migraciones (Flyway al arrancar). `processed_event` guarda cada evento revisado, así un duplicado de Kafka no se revisa dos veces. Guarda un resumen en JSON sin datos personales.

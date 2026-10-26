@@ -46,15 +46,17 @@ public class TransferEventsConsumer {
             return;
         }
         TransferCompleted event = TransferCompleted.parseFrom(record.value());
-        // proto3 lee un mensaje vacío sin error: sin id o sin monto no es un evento válido (spike BANK-66, K8)
-        if (event.getEventId().isBlank() || event.getAmount().isBlank()) {
-            throw new IllegalArgumentException("TransferCompleted sin event_id o sin monto, offset " + record.offset());
+        // proto3 lee un mensaje vacío sin error: sin id, monto o fecha no es un evento válido (spike BANK-66, K8). La
+        // fecha la necesita la regla de frecuencia (BANK-108)
+        if (event.getEventId().isBlank() || event.getAmount().isBlank() || !event.hasCompletedAt()) {
+            throw new IllegalArgumentException("TransferCompleted sin event_id, monto o completed_at, offset "
+                    + record.offset());
         }
         UUID eventId = UUID.fromString(event.getEventId());
         if (!processed.claim(eventId, TransferTopics.TRANSFER_COMPLETED, EventSummary.of(event))) {
             LOG.debugf("Evento %s repetido: ya se revisó", eventId);
             return;
         }
-        review.review(event);
+        review.review(eventId, event);
     }
 }
