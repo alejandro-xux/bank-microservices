@@ -5,9 +5,10 @@ Contratos de la comunicación **interna** entre servicios: llamadas gRPC y event
 | Archivo | Tipo | Quién lo produce o sirve | Quién lo usa |
 |---|---|---|---|
 | `src/main/proto/customers.proto` | gRPC | customers-service (:9091) | accounts-service |
-| `src/main/proto/transfer_events.proto` | Evento en `bank.transfers.v1` | accounts-service (outbox) | notifications-service |
+| `src/main/proto/transfer_events.proto` | Evento en `bank.transfers.v1` | accounts-service (outbox) | notifications-service, fraud-service |
+| `src/main/proto/fraud_events.proto` | Evento en `bank.fraud.v1` (`FraudSuspected`) | fraud-service | nadie todavía |
 
-`TransferTopics` (Java) tiene los nombres del topic, del DLT y de los headers (`event-type`, `event-id`), para que productor y consumidor no los escriban a mano. Los topics los crea `infra/kafka/create-topics.sh`, no la app.
+`TransferTopics` y `FraudTopics` (Java) tienen los nombres de los topics, de los DLT y de los headers (`event-type`, `event-id`), para que productor y consumidor no los escriban a mano. Los topics los crea `infra/kafka/create-topics.sh`, no la app.
 
 El código Java se genera aquí **una sola vez** (`./gradlew build`) y los servicios lo usan como dependencia:
 

@@ -297,7 +297,7 @@ jobs:
       # Deja a docker buildx leer la caché de Actions (la que escribe el job images en main)
       - uses: crazy-max/ghaction-github-runtime@04d248b84655b509d8c44dc1d6f990c879747487 # v4.0.0
 
-      - name: Construir las 7 imágenes
+      - name: Construir las 7 imágenes y el core emulado
         run: |
           for service in config-server discovery-server customers-service accounts-service accounts-service-quarkus notifications-service api-gateway; do
             echo "::group::$service"
@@ -305,6 +305,15 @@ jobs:
               --cache-from "type=gha,scope=$service" .
             echo "::endgroup::"
           done
+          # El core emulado baja su extensión de Maven Central al construirse: sin caché, cada corrida pegaba allí y un
+          # 429 (límite de pedidos) tumbó la E2E de main (BANK-108). Con la caché de capas solo se baja cuando cambia
+          # su Dockerfile; la escribe main, como las demás
+          echo "::group::core-banking-mock"
+          cache_to=""
+          if [ "${{ github.event_name }}" = "push" ]; then cache_to="--cache-to=type=gha,mode=max,scope=core-banking-mock"; fi
+          docker buildx build --load -t bank-core-banking-mock:local \
+            --cache-from "type=gha,scope=core-banking-mock" $cache_to infra/core-banking-mock
+          echo "::endgroup::"
 
       - name: Prueba de punta a punta
         env:

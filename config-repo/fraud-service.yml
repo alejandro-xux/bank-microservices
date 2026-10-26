@@ -18,3 +18,11 @@ quarkus:
 kafka:
   bootstrap:
     servers: ${KAFKA_BOOTSTRAP_SERVERS:localhost:9094}
+# Umbrales de las reglas de fraude (BANK-108): los valores por defecto están en application.properties. Para cambiar
+# uno en este entorno, descomentarlo aquí y reiniciar el servicio (se leen al arrancar)
+#fraud:
+#  rules:
+#    high-amount:
+#      PEN: 10000.00
+#    velocity-max: 5
+#    velocity-window: 10M

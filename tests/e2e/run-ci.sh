@@ -41,7 +41,8 @@ token() {
 
 step "Emulador de Cosmos"
 # El mainframe emulado se construye aquí (es chico); las imágenes de los servicios ya llegan construidas
-"${COMPOSE[@]}" build core-banking-mock
+# En la CI el workflow ya la construyó con la caché de Actions (BANK-108); si no está, se construye aquí
+docker image inspect bank-core-banking-mock:local > /dev/null 2>&1 || "${COMPOSE[@]}" build core-banking-mock
 "${COMPOSE[@]}" up -d --no-build --wait --wait-timeout 180 cosmos
 python3 -I "$ROOT/infra/cosmos-emulator/init.py"
 
