@@ -11,6 +11,7 @@ on:
     branches: [main]
     paths:
       - fraud-service/**
+      - accounts-service-quarkus/**
       - contracts/**
       - platform-bom/**
       - .github/workflows/native.yml
@@ -18,6 +19,7 @@ on:
     branches: [main]
     paths:
       - fraud-service/**
+      - accounts-service-quarkus/**
       - contracts/**
       - platform-bom/**
       - .github/workflows/native.yml
@@ -44,7 +46,8 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        service: [fraud-service]
+        # accounts-service-quarkus (BANK-109): el mismo código que su imagen JVM, en nativo para medirlo (BANK-110)
+        service: [fraud-service, accounts-service-quarkus]
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
@@ -92,13 +95,20 @@ jobs:
           retention-days: 7
 
   native-image:
-    name: imagen nativa ${{ matrix.service }}
+    name: imagen nativa ${{ matrix.image }}
     runs-on: ubuntu-latest
     timeout-minutes: 40
     strategy:
       fail-fast: false
       matrix:
-        service: [fraud-service]
+        # image: el nombre de la imagen sin "bank-" ni ":local" (lo que reciben build-images.sh y scan-images.sh)
+        include:
+          - service: fraud-service
+            dockerfile: fraud-service/Dockerfile
+            image: fraud-service
+          - service: accounts-service-quarkus
+            dockerfile: accounts-service-quarkus/Dockerfile.native
+            image: accounts-service-quarkus-native
     env:
       HADOLINT_VERSION: 2.15.1
       HADOLINT_SHA256: c7187db94eeeeca956519a6af171adc31453941a1e777961f6e680f697c8c507
@@ -114,7 +124,7 @@ jobs:
             "https://github.com/hadolint/hadolint/releases/download/v${HADOLINT_VERSION}/hadolint-linux-x86_64"
           echo "${HADOLINT_SHA256}  $RUNNER_TEMP/hadolint" | sha256sum -c -
           chmod +x "$RUNNER_TEMP/hadolint"
-          "$RUNNER_TEMP/hadolint" --config .hadolint.yaml "${{ matrix.service }}/Dockerfile"
+          "$RUNNER_TEMP/hadolint" --config .hadolint.yaml "${{ matrix.dockerfile }}"
 
       - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
 
@@ -123,19 +133,19 @@ jobs:
         uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
         with:
           context: .
-          file: ${{ matrix.service }}/Dockerfile
-          tags: bank-${{ matrix.service }}:local
+          file: ${{ matrix.dockerfile }}
+          tags: bank-${{ matrix.image }}:local
           load: true
           push: false
           cache-from: type=gha,scope=nativo-${{ matrix.service }}
           cache-to: ${{ github.event_name == 'push' && format('type=gha,mode=max,scope=nativo-{0}', matrix.service) || '' }}
 
       - name: Usuario, HEALTHCHECK y credenciales
-        run: infra/build-images.sh --check-only "${{ matrix.service }}"
+        run: infra/build-images.sh --check-only "${{ matrix.image }}"
 
       - name: Tamaño
         run: |
-          docker image inspect "bank-${{ matrix.service }}:local" --format '{{.Size}}' \
+          docker image inspect "bank-${{ matrix.image }}:local" --format '{{.Size}}' \
             | awk '{printf "Imagen sin comprimir: %.0f MB\n", $1/1048576}' >> "$GITHUB_STEP_SUMMARY"
 
       - name: Trivy
@@ -145,4 +155,4 @@ jobs:
           echo "${TRIVY_SHA256}  $RUNNER_TEMP/trivy.tar.gz" | sha256sum -c -
           tar -xzf "$RUNNER_TEMP/trivy.tar.gz" -C "$RUNNER_TEMP" trivy
           set -o pipefail
-          TRIVY_BIN="$RUNNER_TEMP/trivy" infra/scan-images.sh "bank-${{ matrix.service }}:local" | tee -a "$GITHUB_STEP_SUMMARY"
+          TRIVY_BIN="$RUNNER_TEMP/trivy" infra/scan-images.sh "bank-${{ matrix.image }}:local" | tee -a "$GITHUB_STEP_SUMMARY"
