@@ -2,10 +2,14 @@
 # Levanta el entorno local en orden y espera a que cada pieza esté sana (BANK-49):
 #   Docker (Redis, PostgreSQL, Keycloak, Kafka, Mailpit y el mainframe emulado) → config-server → discovery-server → customers-service
 #   → accounts-service → notifications-service → api-gateway
-# Uso: infra/start-local.sh          Apagar: infra/stop-local.sh [--all]
+# Uso: infra/start-local.sh                los servicios con bootRun (para desarrollar: cambias código y reinicias uno)
+#      infra/start-local.sh --containers   los servicios también en contenedores, como en producción (BANK-93)
+# Apagar: infra/stop-local.sh [--containers] [--all]
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+CONTAINERS=false
+[ "${1:-}" = "--containers" ] && CONTAINERS=true
 LOGS="$ROOT/.local/logs"
 ENV_FILE="${BANK_ENV_FILE:-$HOME/.bank-microservices.env}"
 mkdir -p "$LOGS"
@@ -83,13 +87,32 @@ if ! wait_container bank-kafka-init "exited 0" '{{.State.Status}} {{.State.ExitC
 fi
 echo "• redis :6380, postgres :5433, keycloak :8180, kafka :9094 (topics listos), mailpit :8025 y core-banking-mock :8089 listos"
 
-echo "▶ Servicios"
-start config-server 8888 /actuator/health
-start discovery-server 8761 /actuator/health
-start customers-service 8081 /actuator/health/liveness
-start accounts-service 8082 /actuator/health/readiness
-start notifications-service 8083 /actuator/health/readiness
-start api-gateway 8080 /actuator/health/liveness
+if $CONTAINERS; then
+  # Los dos modos usan los mismos puertos (8080, 8761): no se mezclan
+  if pgrep -f 'bootRun|ServiceApplication|ServerApplication|ApiGatewayApplication' > /dev/null; then
+    echo "✗ Hay servicios corriendo con bootRun: apágalos con infra/stop-local.sh antes de usar --containers" >&2
+    exit 1
+  fi
+  echo "▶ Servicios en contenedores (construye las imágenes que falten o hayan cambiado)"
+  # --wait: vuelve cuando los 6 están healthy (su HEALTHCHECK), en el orden de los depends_on
+  if ! docker compose -f "$ROOT/infra/docker-compose.yml" --profile app up -d --build --wait --wait-timeout 300 > "$LOGS/containers.log" 2>&1; then
+    echo "✗ algún servicio no quedó sano. Revisa $LOGS/containers.log y docker compose -f infra/docker-compose.yml --profile app ps" >&2
+    exit 1
+  fi
+  echo "• config-server, discovery-server, customers-service, accounts-service, notifications-service y api-gateway healthy"
+  GATEWAY_LOG="docker logs bank-api-gateway"
+  # accounts no se publica a la Mac: el seed abre las cuentas por el gateway
+  export ACCOUNTS_URL=http://localhost:8080/api
+else
+  echo "▶ Servicios"
+  start config-server 8888 /actuator/health
+  start discovery-server 8761 /actuator/health
+  start customers-service 8081 /actuator/health/liveness
+  start accounts-service 8082 /actuator/health/readiness
+  start notifications-service 8083 /actuator/health/readiness
+  start api-gateway 8080 /actuator/health/liveness
+  GATEWAY_LOG="$LOGS/api-gateway.log"
+fi
 
 # El gateway enruta cuando ya tiene la lista de Eureka (~20-30 s): se prueba con el asesor local
 # (usuario de prueba del realm) hasta que un id inexistente responda 404 desde el servicio
@@ -103,7 +126,7 @@ wait_route() {
             "http://localhost:8080$path")" = "404" ]; do
     waited=$((waited + 2))
     if [ "$waited" -ge 90 ]; then
-      echo "✗ el gateway no enruta a $name; revisa $LOGS/api-gateway.log"
+      echo "✗ el gateway no enruta a $name; revisa $GATEWAY_LOG"
       exit 1
     fi
     sleep 2
@@ -116,19 +139,31 @@ wait_route accounts /api/accounts/00000000-0000-4000-8000-000000000000
 # Con la base vacía (primer arranque o después de --all), las cuentas de prueba con números y saldos fijos (BANK-75)
 "$ROOT/infra/seed-local.sh" --if-empty
 
+if $CONTAINERS; then
+  SWAGGER="no se publica en este modo (usa la API por el gateway)"
+  CONFIG="no se publica en este modo: docker exec bank-config-server curl -s localhost:8888/customers-service/default"
+  LOGS_HINT="docker logs bank-<servicio>"
+  STOP="infra/stop-local.sh --containers   (con --all también la infraestructura)"
+else
+  SWAGGER="http://localhost:8081/swagger-ui.html  ·  http://localhost:8082/swagger-ui.html"
+  CONFIG="http://localhost:8888/customers-service/default"
+  LOGS_HINT="$LOGS"
+  STOP="infra/stop-local.sh   (con --all también los contenedores de Docker)"
+fi
+
 cat <<EOF
 
 ✅ Entorno local listo
    API (gateway)   http://localhost:8080/api/customers/...  /api/accounts/...  /api/transfers
-   Swagger         http://localhost:8081/swagger-ui.html  ·  http://localhost:8082/swagger-ui.html
+   Swagger         $SWAGGER
    Avisos          notifications-service :8083 (sin API; consume bank.transfers.v1)
    Eureka          http://localhost:8761
-   Config          http://localhost:8888/customers-service/default
+   Config          $CONFIG
    Keycloak        http://localhost:8180/admin  (admin / admin)
    Kafka           localhost:9094  (topics bank.transfers.v1 y bank.transfers.v1.DLT)
    Correos         http://localhost:8025  (Mailpit)
    Mainframe       http://localhost:8089/core/asientos  (core-banking-mock, tramas de largo fijo)
    Datos de prueba infra/seed-local.sh --show  (número → id de cada cuenta)
-   Logs            $LOGS
-   Apagar          infra/stop-local.sh   (con --all también los contenedores de Docker)
+   Logs            $LOGS_HINT
+   Apagar          $STOP
 EOF

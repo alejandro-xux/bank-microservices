@@ -1,5 +1,34 @@
 name: bank-microservices
 
+# Los 6 servicios en contenedores (BANK-93) van en el perfil "app": sin él, `docker compose up` levanta solo la
+# infraestructura, para correr los servicios con bootRun (infra/start-local.sh). Con él, el sistema completo como
+# en producción (infra/start-local.sh --containers). Cada servicio recibe por variables los hosts de la red de Docker:
+# son las mismas variables que ya lee config-repo/, así que la configuración no cambia
+x-servicio: &servicio
+  profiles: [app]
+  restart: "no"
+  environment: &entorno
+    CONFIG_SERVER_URL: http://config-server:8888
+    EUREKA_URL: http://discovery-server:8761/eureka
+    # Se registran en Eureka con su IP: el nombre del contenedor no lo conocen los otros
+    EUREKA_INSTANCE_PREFERIPADDRESS: "true"
+    # El emisor que dicen los tokens (KC_HOSTNAME de Keycloak) y las claves por la red interna: con issuer-uri solo,
+    # el servicio buscaría la configuración en "localhost:8180", que dentro del contenedor es él mismo (BANK-91 C6)
+    AUTH_ISSUER_URI: http://localhost:8180/realms/bank
+    SPRING_SECURITY_OAUTH2_RESOURCESERVER_JWT_JWKSETURI: http://keycloak:8080/realms/bank/protocol/openid-connect/certs
+    AUTH_TOKEN_URI: http://keycloak:8080/realms/bank/protocol/openid-connect/token
+    REDIS_HOST: redis
+    REDIS_PORT: "6379"
+    DB_HOST: postgres
+    DB_PORT: "5432"
+    KAFKA_BOOTSTRAP_SERVERS: kafka:9092
+    CUSTOMERS_GRPC_ADDRESS: static://customers-service:9091
+    CORE_BANKING_URL: http://core-banking-mock:8080
+    MAIL_HOST: mailpit
+    # Secreto del cliente notifications-service del Keycloak LOCAL (infra/keycloak/bank-realm.json): no es un
+    # secreto real; en Azure llega desde Key Vault
+    NOTIFICATIONS_CLIENT_SECRET: notifications-local
+
 services:
   redis:
     image: redis:8.8.3-alpine
@@ -38,6 +67,10 @@ services:
       KC_BOOTSTRAP_ADMIN_USERNAME: admin
       KC_BOOTSTRAP_ADMIN_PASSWORD: admin
       KC_HEALTH_ENABLED: "true"
+      # El emisor (iss) de todo token es siempre http://localhost:8180, se pida desde la Mac o desde la red de Docker
+      # (keycloak:8080). Sin esto, el token de servicio de notifications pedido por la red interna dice
+      # iss=http://keycloak:8080, customers lo rechaza y no salen los correos (BANK-91 C6)
+      KC_HOSTNAME: http://localhost:8180
     ports:
       - "8180:8080"
     volumes:
@@ -124,3 +157,75 @@ services:
       interval: 5s
       timeout: 3s
       retries: 10
+
+  # --- Los servicios (perfil app, BANK-93) --------------------------------------------------------------
+  # Imágenes de BANK-92 (contexto = raíz del repo). Cada una trae su HEALTHCHECK, que es lo que esperan los
+  # depends_on. Solo se publican a la Mac el gateway (la API) y Eureka (para mirar); el resto queda en la red interna
+  config-server:
+    <<: *servicio
+    build: {context: .., dockerfile: config-server/Dockerfile}
+    image: bank-config-server:local
+    container_name: bank-config-server
+    environment:
+      CONFIG_REPO: /config-repo
+    volumes:
+      - ../config-repo:/config-repo:ro
+
+  discovery-server:
+    <<: *servicio
+    build: {context: .., dockerfile: discovery-server/Dockerfile}
+    image: bank-discovery-server:local
+    container_name: bank-discovery-server
+    ports:
+      - "8761:8761"
+
+  customers-service:
+    <<: *servicio
+    build: {context: .., dockerfile: customers-service/Dockerfile}
+    image: bank-customers-service:local
+    container_name: bank-customers-service
+    # COSMOS_ENDPOINT y COSMOS_KEY: solo desde el archivo fuera del repo (el mismo que usa start-local.sh)
+    env_file:
+      - path: ${BANK_ENV_FILE:-${HOME}/.bank-microservices.env}
+        required: true
+    depends_on: &base
+      config-server: {condition: service_healthy}
+      discovery-server: {condition: service_healthy}
+      keycloak: {condition: service_healthy}
+      redis: {condition: service_healthy}
+
+  accounts-service:
+    <<: *servicio
+    build: {context: .., dockerfile: accounts-service/Dockerfile}
+    image: bank-accounts-service:local
+    container_name: bank-accounts-service
+    depends_on:
+      <<: *base
+      postgres: {condition: service_healthy}
+      kafka-init: {condition: service_completed_successfully}
+      core-banking-mock: {condition: service_healthy}
+      customers-service: {condition: service_healthy}
+
+  notifications-service:
+    <<: *servicio
+    build: {context: .., dockerfile: notifications-service/Dockerfile}
+    image: bank-notifications-service:local
+    container_name: bank-notifications-service
+    depends_on:
+      <<: *base
+      postgres: {condition: service_healthy}
+      kafka-init: {condition: service_completed_successfully}
+      mailpit: {condition: service_healthy}
+      customers-service: {condition: service_healthy}
+
+  api-gateway:
+    <<: *servicio
+    build: {context: .., dockerfile: api-gateway/Dockerfile}
+    image: bank-api-gateway:local
+    container_name: bank-api-gateway
+    ports:
+      - "8080:8080"
+    depends_on:
+      <<: *base
+      customers-service: {condition: service_healthy}
+      accounts-service: {condition: service_healthy}

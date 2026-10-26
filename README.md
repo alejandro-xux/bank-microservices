@@ -24,6 +24,16 @@ infra/stop-local.sh     # apaga los servicios (con --all también los contenedor
 
 Espera a que cada pieza esté sana antes de seguir, salta las que ya están corriendo y termina cuando el gateway ya enruta a customers-service (~1 minuto desde cero). Los logs de cada servicio quedan en `.local/logs/`. Las secciones siguientes explican cada pieza por separado.
 
+**Dos modos (BANK-93).** El de arriba corre los servicios con `bootRun`: sirve para desarrollar, porque cambias código y reinicias un solo servicio. Con `--containers` los 6 servicios también corren en contenedores, con las imágenes de BANK-92, como correrán en producción:
+
+```bash
+infra/start-local.sh --containers   # construye las imágenes que falten o hayan cambiado y levanta todo (~2 min)
+infra/stop-local.sh --containers    # apaga solo los 6 servicios; la infraestructura y sus datos siguen
+infra/stop-local.sh --all           # todo, en cualquiera de los dos modos
+```
+
+Los dos modos usan los mismos puertos, así que no se mezclan: `--containers` se niega a arrancar si hay servicios con `bootRun`. En contenedores solo se publican el gateway (`:8080`) y Eureka (`:8761`). Los servicios se encuentran por la red de Docker (`postgres`, `kafka:9092`, `keycloak:8080`…), con las mismas variables que ya lee `config-repo/` (los valores están en `infra/docker-compose.yml`, perfil `app`). Las credenciales de Cosmos llegan del mismo `~/.bank-microservices.env`: sin ese archivo el perfil `app` no arranca. Keycloak firma todos los tokens con el emisor `http://localhost:8180` (`KC_HOSTNAME`), se pidan desde la Mac o desde la red de Docker. Sin eso, el token que notifications pide por la red interna sale con otro emisor, customers lo rechaza y no llegan los correos. La prueba de punta a punta (`tests/e2e`) pasa igual en los dos modos.
+
 ### Imágenes de los servicios (BANK-92)
 Cada servicio tiene su `Dockerfile` en dos etapas: compila con el JDK 21 y Gradle, y la imagen final lleva solo el JRE 21 (`eclipse-temurin:21-jre-noble`, elegida en el spike BANK-91) y la aplicación separada en capas. Se construyen desde la raíz del repo, porque cada servicio compila `platform-bom` y `contracts` con `includeBuild`.
 
