@@ -14,9 +14,11 @@ import java.nio.charset.StandardCharsets;
 // Bytes del topic → el mensaje de contracts/transfer_events.proto que dice el header event-type (BANK-80; antes solo
 // TransferCompleted, BANK-70). El tipo se decide por el header y NUNCA probando: los números de campo de los dos
 // mensajes se pisan, y un TransferFailed leído como TransferCompleted puede salir legible con los datos corridos.
-// Un tipo que este servicio no conoce (o sin header) no es un error: es un evento para otro consumidor, y se devuelve
-// como UnknownTransferEvent para que el listener lo salte. Va dentro de ErrorHandlingDeserializer
-// (config-repo/notifications-service.yml): unos bytes ilegibles no tiran al consumidor, van al DLT (BANK-73)
+// Un tipo que este servicio no conoce (CON header) no es un error: es un evento para otro consumidor, y se devuelve
+// como UnknownTransferEvent para que el listener lo salte; así accounts puede agregar eventos nuevos (BANK-80). Un
+// mensaje SIN header sí es un error: está roto, nadie puede saber qué es, y va al DLT (BANK-111). Va dentro de
+// ErrorHandlingDeserializer (config-repo/notifications-service.yml): ilegibles y sin tipo no tiran al consumidor, van
+// al DLT sin reintentos (BANK-73)
 public class TransferEventDeserializer implements Deserializer<Object> {
 
     // Un evento de un tipo que este servicio no maneja
@@ -44,6 +46,10 @@ public class TransferEventDeserializer implements Deserializer<Object> {
 
     private static String eventType(Headers headers) {
         Header header = headers.lastHeader(TransferTopics.HEADER_EVENT_TYPE);
-        return header == null ? "" : new String(header.value(), StandardCharsets.UTF_8);
+        if (header == null) {
+            throw new SerializationException("Mensaje sin header " + TransferTopics.HEADER_EVENT_TYPE
+                    + ": no se sabe qué evento es");
+        }
+        return new String(header.value(), StandardCharsets.UTF_8);
     }
 }

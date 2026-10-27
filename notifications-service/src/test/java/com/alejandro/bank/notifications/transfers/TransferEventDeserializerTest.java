@@ -32,11 +32,17 @@ class TransferEventDeserializerTest {
     }
 
     @Test
-    void anUnknownTypeOrNoHeaderIsNotAnErrorItIsAnEventForSomeoneElse() {
+    void anUnknownTypeIsNotAnErrorItIsAnEventForSomeoneElse() {
         assertThat(deserializer.deserialize("t", headers("TransferScheduled"), new byte[]{1, 2, 3}))
                 .isEqualTo(new TransferEventDeserializer.UnknownTransferEvent("TransferScheduled"));
-        assertThat(deserializer.deserialize("t", new RecordHeaders(), FAILED.toByteArray()))
-                .isEqualTo(new TransferEventDeserializer.UnknownTransferEvent(""));
+    }
+
+    // BANK-111: sin header no es "un evento de otro", es un mensaje roto
+    @Test
+    void withoutHeaderItIsABrokenMessage() {
+        assertThatThrownBy(() -> deserializer.deserialize("t", new RecordHeaders(), FAILED.toByteArray()))
+                .isInstanceOf(SerializationException.class)
+                .hasMessageContaining("sin header event-type");
     }
 
     @Test

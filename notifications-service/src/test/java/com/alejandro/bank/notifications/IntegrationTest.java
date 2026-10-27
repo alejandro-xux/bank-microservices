@@ -107,8 +107,11 @@ public abstract class IntegrationTest {
                 ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, StringSerializer.class,
                 ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, ByteArraySerializer.class))) {
             ProducerRecord<String, byte[]> record = new ProducerRecord<>(TransferTopics.TOPIC, key, value);
-            record.headers().add(TransferTopics.HEADER_EVENT_TYPE, eventType.getBytes(StandardCharsets.UTF_8))
-                    .add(TransferTopics.HEADER_EVENT_ID, UUID.randomUUID().toString().getBytes(StandardCharsets.UTF_8));
+            // eventType null: sin el header, como un productor roto (BANK-111)
+            if (eventType != null) {
+                record.headers().add(TransferTopics.HEADER_EVENT_TYPE, eventType.getBytes(StandardCharsets.UTF_8));
+            }
+            record.headers().add(TransferTopics.HEADER_EVENT_ID, UUID.randomUUID().toString().getBytes(StandardCharsets.UTF_8));
             producer.send(record).get();
         }
     }

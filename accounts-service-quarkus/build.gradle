@@ -56,6 +56,8 @@ dependencies {
     // El relay del outbox con el cliente de Kafka directo (D5), como el productor de accounts-service
     implementation 'io.quarkus:quarkus-kafka-client'
     implementation 'io.quarkus:quarkus-smallrye-health'
+    // OpenAPI con los mismos paths, códigos y esquemas que springdoc en accounts-service (BANK-111)
+    implementation 'io.quarkus:quarkus-smallrye-openapi'
     implementation 'io.quarkus:quarkus-spring-cloud-config-client'
 
     testImplementation 'io.quarkus:quarkus-junit5'

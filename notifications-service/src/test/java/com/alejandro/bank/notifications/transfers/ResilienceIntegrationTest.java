@@ -92,6 +92,18 @@ class ResilienceIntegrationTest extends TokenMockedIntegrationTest {
 
     // ---------------------------------------------------------------------------------------------------
 
+    // BANK-111: un mensaje sin header event-type está roto (nadie puede saber qué es): va al DLT sin reintentos, y el
+    // consumidor sigue con el que viene detrás. Un tipo desconocido CON header se sigue ignorando (TransferFailedIntegrationTest)
+    @Test
+    void aMessageWithoutEventTypeGoesToTheDeadLetterTopic() throws Exception {
+        publish("cuenta-de-prueba", null, transfer("sin-header-event-type").toByteArray());
+
+        List<ConsumerRecord<String, byte[]>> dead = awaitDeadLetters("sin-header-event-type", 1);
+        assertThat(dead).hasSize(1);
+        // Como un ilegible: falla al deserializar, sin reintentos
+        assertThat(header(dead.getFirst(), "kafka_dlt-exception-fqcn")).contains("DeserializationException");
+    }
+
     private static TransferCompleted transfer(String amount) {
         return TransferCompleted.newBuilder()
                 .setEventId(UUID.randomUUID().toString()).setTransferId(UUID.randomUUID().toString())

@@ -1,0 +1,14 @@
+# Contrato de la API de accounts (BANK-111): lo que tienen que publicar IGUAL las dos versiones en su OpenAPI.
+# Una línea por operación: MÉTODO path códigos de respuesta. Después, los esquemas y el esquema de seguridad.
+# Lo revisan accounts-service (OpenApiDocsTest) y accounts-service-quarkus (OpenApiParityTest): si una versión cambia
+# su API, su prueba falla hasta que la otra haga el mismo cambio y se actualice este archivo
+GET /accounts 200,400,401,403
+GET /accounts/me 200,401,403,503
+GET /accounts/{id} 200,401,403,404,503
+GET /accounts/{id}/movements 200,400,401,403,404,503
+GET /transfers/{id} 200,401,403,404
+POST /accounts 201,400,401,403,422,503
+POST /accounts/{id}/deposits 201,400,401,403,404,409,422
+POST /transfers 201,202,400,401,403,409,422,503
+schemas AccountResponse,DepositRequest,MovementLineResponse,MovementPageResponse,MovementResponse,OpenAccountRequest,ProblemDetail,TransferRequest,TransferResponse
+security oidc
