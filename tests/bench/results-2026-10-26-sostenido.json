@@ -1,0 +1,192 @@
+{
+  "config": {
+    "runs": 1,
+    "warmup": 30,
+    "seconds": 180,
+    "threads": 8,
+    "mem_limit": "768m",
+    "cpus": "2"
+  },
+  "variants": {
+    "spring-jvm": {
+      "image_mb": 212.0,
+      "runs": [
+        {
+          "startup_s": 13.039,
+          "first_request_ms": 743.8,
+          "idle_mib": 374.0,
+          "load_peak_mib": 506.3,
+          "p50_ms": 28.6,
+          "p95_ms": 73.2,
+          "transfers_per_s": 226.0,
+          "codes": {
+            "201": 40685
+          },
+          "money_unchanged": true,
+          "pending_after": 0,
+          "completed": 42840,
+          "events": 42840,
+          "distinct_events": 42840
+        }
+      ],
+      "startup_s": {
+        "median": 13.039,
+        "min": 13.039,
+        "max": 13.039
+      },
+      "first_request_ms": {
+        "median": 743.8,
+        "min": 743.8,
+        "max": 743.8
+      },
+      "idle_mib": {
+        "median": 374.0,
+        "min": 374.0,
+        "max": 374.0
+      },
+      "load_peak_mib": {
+        "median": 506.3,
+        "min": 506.3,
+        "max": 506.3
+      },
+      "p50_ms": {
+        "median": 28.6,
+        "min": 28.6,
+        "max": 28.6
+      },
+      "p95_ms": {
+        "median": 73.2,
+        "min": 73.2,
+        "max": 73.2
+      },
+      "transfers_per_s": {
+        "median": 226.0,
+        "min": 226.0,
+        "max": 226.0
+      },
+      "all_money_unchanged": true,
+      "all_exactly_once": true,
+      "pending_after_max": 0
+    },
+    "quarkus-jvm": {
+      "image_mb": 167.5,
+      "runs": [
+        {
+          "startup_s": 5.327,
+          "first_request_ms": 676.1,
+          "idle_mib": 209.6,
+          "load_peak_mib": 357.3,
+          "p50_ms": 15.2,
+          "p95_ms": 37.8,
+          "transfers_per_s": 423.1,
+          "codes": {
+            "201": 76149
+          },
+          "money_unchanged": true,
+          "pending_after": 0,
+          "completed": 82046,
+          "events": 82046,
+          "distinct_events": 82046
+        }
+      ],
+      "startup_s": {
+        "median": 5.327,
+        "min": 5.327,
+        "max": 5.327
+      },
+      "first_request_ms": {
+        "median": 676.1,
+        "min": 676.1,
+        "max": 676.1
+      },
+      "idle_mib": {
+        "median": 209.6,
+        "min": 209.6,
+        "max": 209.6
+      },
+      "load_peak_mib": {
+        "median": 357.3,
+        "min": 357.3,
+        "max": 357.3
+      },
+      "p50_ms": {
+        "median": 15.2,
+        "min": 15.2,
+        "max": 15.2
+      },
+      "p95_ms": {
+        "median": 37.8,
+        "min": 37.8,
+        "max": 37.8
+      },
+      "transfers_per_s": {
+        "median": 423.1,
+        "min": 423.1,
+        "max": 423.1
+      },
+      "all_money_unchanged": true,
+      "all_exactly_once": true,
+      "pending_after_max": 0
+    },
+    "quarkus-native": {
+      "image_mb": 53.2,
+      "runs": [
+        {
+          "startup_s": 1.53,
+          "first_request_ms": 101.2,
+          "idle_mib": 29.3,
+          "load_peak_mib": 206.5,
+          "p50_ms": 19.8,
+          "p95_ms": 59.9,
+          "transfers_per_s": 286.2,
+          "codes": {
+            "201": 51523
+          },
+          "money_unchanged": true,
+          "pending_after": 0,
+          "completed": 62136,
+          "events": 62136,
+          "distinct_events": 62136
+        }
+      ],
+      "startup_s": {
+        "median": 1.53,
+        "min": 1.53,
+        "max": 1.53
+      },
+      "first_request_ms": {
+        "median": 101.2,
+        "min": 101.2,
+        "max": 101.2
+      },
+      "idle_mib": {
+        "median": 29.3,
+        "min": 29.3,
+        "max": 29.3
+      },
+      "load_peak_mib": {
+        "median": 206.5,
+        "min": 206.5,
+        "max": 206.5
+      },
+      "p50_ms": {
+        "median": 19.8,
+        "min": 19.8,
+        "max": 19.8
+      },
+      "p95_ms": {
+        "median": 59.9,
+        "min": 59.9,
+        "max": 59.9
+      },
+      "transfers_per_s": {
+        "median": 286.2,
+        "min": 286.2,
+        "max": 286.2
+      },
+      "all_money_unchanged": true,
+      "all_exactly_once": true,
+      "pending_after_max": 0
+    }
+  }
+}

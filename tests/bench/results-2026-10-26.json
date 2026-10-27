@@ -1,0 +1,396 @@
+{
+  "config": {
+    "runs": 5,
+    "warmup": 30,
+    "seconds": 30,
+    "threads": 8,
+    "mem_limit": "768m",
+    "cpus": "2"
+  },
+  "variants": {
+    "spring-jvm": {
+      "image_mb": 212.0,
+      "runs": [
+        {
+          "startup_s": 5.981,
+          "first_request_ms": 324.4,
+          "idle_mib": 345.9,
+          "load_peak_mib": 489.2,
+          "p50_ms": 21.8,
+          "p95_ms": 57.6,
+          "transfers_per_s": 289.7,
+          "codes": {
+            "201": 8690
+          },
+          "money_unchanged": true,
+          "pending_after": 0,
+          "completed": 13582,
+          "events": 13582,
+          "distinct_events": 13582
+        },
+        {
+          "startup_s": 6.371,
+          "first_request_ms": 333.2,
+          "idle_mib": 347.2,
+          "load_peak_mib": 479.4,
+          "p50_ms": 20.4,
+          "p95_ms": 57.4,
+          "transfers_per_s": 301.0,
+          "codes": {
+            "201": 9031
+          },
+          "money_unchanged": true,
+          "pending_after": 0,
+          "completed": 13110,
+          "events": 13110,
+          "distinct_events": 13110
+        },
+        {
+          "startup_s": 6.484,
+          "first_request_ms": 421.6,
+          "idle_mib": 341.3,
+          "load_peak_mib": 472.3,
+          "p50_ms": 24.6,
+          "p95_ms": 67.8,
+          "transfers_per_s": 227.1,
+          "codes": {
+            "201": 6813
+          },
+          "money_unchanged": true,
+          "pending_after": 0,
+          "completed": 11054,
+          "events": 11054,
+          "distinct_events": 11054
+        },
+        {
+          "startup_s": 7.441,
+          "first_request_ms": 495.5,
+          "idle_mib": 347.9,
+          "load_peak_mib": 482.8,
+          "p50_ms": 20.9,
+          "p95_ms": 60.2,
+          "transfers_per_s": 282.9,
+          "codes": {
+            "201": 8488
+          },
+          "money_unchanged": true,
+          "pending_after": 0,
+          "completed": 13265,
+          "events": 13265,
+          "distinct_events": 13265
+        },
+        {
+          "startup_s": 9.653,
+          "first_request_ms": 398.5,
+          "idle_mib": 344.6,
+          "load_peak_mib": 479.9,
+          "p50_ms": 40.0,
+          "p95_ms": 81.1,
+          "transfers_per_s": 172.8,
+          "codes": {
+            "201": 5184
+          },
+          "money_unchanged": true,
+          "pending_after": 0,
+          "completed": 7708,
+          "events": 7708,
+          "distinct_events": 7708
+        }
+      ],
+      "startup_s": {
+        "median": 6.484,
+        "min": 5.981,
+        "max": 9.653
+      },
+      "first_request_ms": {
+        "median": 398.5,
+        "min": 324.4,
+        "max": 495.5
+      },
+      "idle_mib": {
+        "median": 345.9,
+        "min": 341.3,
+        "max": 347.9
+      },
+      "load_peak_mib": {
+        "median": 479.9,
+        "min": 472.3,
+        "max": 489.2
+      },
+      "p50_ms": {
+        "median": 21.8,
+        "min": 20.4,
+        "max": 40.0
+      },
+      "p95_ms": {
+        "median": 60.2,
+        "min": 57.4,
+        "max": 81.1
+      },
+      "transfers_per_s": {
+        "median": 282.9,
+        "min": 172.8,
+        "max": 301.0
+      },
+      "all_money_unchanged": true,
+      "all_exactly_once": true,
+      "pending_after_max": 0
+    },
+    "quarkus-jvm": {
+      "image_mb": 167.5,
+      "runs": [
+        {
+          "startup_s": 3.705,
+          "first_request_ms": 800.8,
+          "idle_mib": 207.3,
+          "load_peak_mib": 347.5,
+          "p50_ms": 23.7,
+          "p95_ms": 66.1,
+          "transfers_per_s": 252.7,
+          "codes": {
+            "201": 7580
+          },
+          "money_unchanged": true,
+          "pending_after": 0,
+          "completed": 10851,
+          "events": 10851,
+          "distinct_events": 10851
+        },
+        {
+          "startup_s": 3.809,
+          "first_request_ms": 837.8,
+          "idle_mib": 202.7,
+          "load_peak_mib": 344.1,
+          "p50_ms": 15.6,
+          "p95_ms": 53.8,
+          "transfers_per_s": 373.9,
+          "codes": {
+            "201": 11218
+          },
+          "money_unchanged": true,
+          "pending_after": 0,
+          "completed": 14669,
+          "events": 14669,
+          "distinct_events": 14669
+        },
+        {
+          "startup_s": 3.091,
+          "first_request_ms": 453.5,
+          "idle_mib": 202.6,
+          "load_peak_mib": 335.6,
+          "p50_ms": 26.8,
+          "p95_ms": 72.9,
+          "transfers_per_s": 230.5,
+          "codes": {
+            "201": 6916
+          },
+          "money_unchanged": true,
+          "pending_after": 0,
+          "completed": 10716,
+          "events": 10716,
+          "distinct_events": 10716
+        },
+        {
+          "startup_s": 8.119,
+          "first_request_ms": 897.7,
+          "idle_mib": 207.1,
+          "load_peak_mib": 343.5,
+          "p50_ms": 15.1,
+          "p95_ms": 44.2,
+          "transfers_per_s": 421.4,
+          "codes": {
+            "201": 12643
+          },
+          "money_unchanged": true,
+          "pending_after": 0,
+          "completed": 16201,
+          "events": 16201,
+          "distinct_events": 16201
+        },
+        {
+          "startup_s": 3.165,
+          "first_request_ms": 314.7,
+          "idle_mib": 201.1,
+          "load_peak_mib": 346.6,
+          "p50_ms": 14.4,
+          "p95_ms": 36.1,
+          "transfers_per_s": 465.8,
+          "codes": {
+            "201": 13974
+          },
+          "money_unchanged": true,
+          "pending_after": 0,
+          "completed": 20180,
+          "events": 20180,
+          "distinct_events": 20180
+        }
+      ],
+      "startup_s": {
+        "median": 3.705,
+        "min": 3.091,
+        "max": 8.119
+      },
+      "first_request_ms": {
+        "median": 800.8,
+        "min": 314.7,
+        "max": 897.7
+      },
+      "idle_mib": {
+        "median": 202.7,
+        "min": 201.1,
+        "max": 207.3
+      },
+      "load_peak_mib": {
+        "median": 344.1,
+        "min": 335.6,
+        "max": 347.5
+      },
+      "p50_ms": {
+        "median": 15.6,
+        "min": 14.4,
+        "max": 26.8
+      },
+      "p95_ms": {
+        "median": 53.8,
+        "min": 36.1,
+        "max": 72.9
+      },
+      "transfers_per_s": {
+        "median": 373.9,
+        "min": 230.5,
+        "max": 465.8
+      },
+      "all_money_unchanged": true,
+      "all_exactly_once": true,
+      "pending_after_max": 0
+    },
+    "quarkus-native": {
+      "image_mb": 53.2,
+      "runs": [
+        {
+          "startup_s": 1.094,
+          "first_request_ms": 85.9,
+          "idle_mib": 29.3,
+          "load_peak_mib": 186.9,
+          "p50_ms": 15.1,
+          "p95_ms": 29.7,
+          "transfers_per_s": 455.0,
+          "codes": {
+            "201": 13649
+          },
+          "money_unchanged": true,
+          "pending_after": 0,
+          "completed": 27447,
+          "events": 27447,
+          "distinct_events": 27447
+        },
+        {
+          "startup_s": 0.666,
+          "first_request_ms": 36.7,
+          "idle_mib": 30.1,
+          "load_peak_mib": 164.3,
+          "p50_ms": 15.5,
+          "p95_ms": 36.4,
+          "transfers_per_s": 422.6,
+          "codes": {
+            "201": 12679
+          },
+          "money_unchanged": true,
+          "pending_after": 0,
+          "completed": 25902,
+          "events": 25902,
+          "distinct_events": 25902
+        },
+        {
+          "startup_s": 0.788,
+          "first_request_ms": 23.4,
+          "idle_mib": 29.5,
+          "load_peak_mib": 172.7,
+          "p50_ms": 16.1,
+          "p95_ms": 32.7,
+          "transfers_per_s": 423.1,
+          "codes": {
+            "201": 12694
+          },
+          "money_unchanged": true,
+          "pending_after": 0,
+          "completed": 24891,
+          "events": 24891,
+          "distinct_events": 24891
+        },
+        {
+          "startup_s": 0.564,
+          "first_request_ms": 26.8,
+          "idle_mib": 29.6,
+          "load_peak_mib": 179.1,
+          "p50_ms": 24.6,
+          "p95_ms": 65.8,
+          "transfers_per_s": 240.3,
+          "codes": {
+            "201": 7210
+          },
+          "money_unchanged": true,
+          "pending_after": 0,
+          "completed": 13901,
+          "events": 13901,
+          "distinct_events": 13901
+        },
+        {
+          "startup_s": 1.443,
+          "first_request_ms": 139.7,
+          "idle_mib": 29.6,
+          "load_peak_mib": 177.6,
+          "p50_ms": 17.0,
+          "p95_ms": 46.4,
+          "transfers_per_s": 355.3,
+          "codes": {
+            "201": 10659
+          },
+          "money_unchanged": true,
+          "pending_after": 0,
+          "completed": 16470,
+          "events": 16470,
+          "distinct_events": 16470
+        }
+      ],
+      "startup_s": {
+        "median": 0.788,
+        "min": 0.564,
+        "max": 1.443
+      },
+      "first_request_ms": {
+        "median": 36.7,
+        "min": 23.4,
+        "max": 139.7
+      },
+      "idle_mib": {
+        "median": 29.6,
+        "min": 29.3,
+        "max": 30.1
+      },
+      "load_peak_mib": {
+        "median": 177.6,
+        "min": 164.3,
+        "max": 186.9
+      },
+      "p50_ms": {
+        "median": 16.1,
+        "min": 15.1,
+        "max": 24.6
+      },
+      "p95_ms": {
+        "median": 36.4,
+        "min": 29.7,
+        "max": 65.8
+      },
+      "transfers_per_s": {
+        "median": 422.6,
+        "min": 240.3,
+        "max": 455.0
+      },
+      "all_money_unchanged": true,
+      "all_exactly_once": true,
+      "pending_after_max": 0
+    }
+  }
+}
