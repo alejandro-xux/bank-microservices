@@ -4,6 +4,7 @@ import com.alejandro.bank.accounts.security.AccountAccessPolicy;
 import com.alejandro.bank.accounts.service.AccountService;
 import com.alejandro.bank.accounts.service.DepositService;
 import com.alejandro.bank.accounts.service.MovementService;
+import com.alejandro.bank.accounts.security.Problems;
 import jakarta.annotation.security.RolesAllowed;
 import jakarta.inject.Inject;
 import jakarta.validation.Valid;
@@ -18,6 +19,10 @@ import jakarta.ws.rs.Produces;
 import jakarta.ws.rs.QueryParam;
 import jakarta.ws.rs.core.MediaType;
 import jakarta.ws.rs.core.Response;
+import org.eclipse.microprofile.openapi.annotations.media.Content;
+import org.eclipse.microprofile.openapi.annotations.media.Schema;
+import org.eclipse.microprofile.openapi.annotations.responses.APIResponse;
+import org.eclipse.microprofile.openapi.annotations.responses.APIResponses;
 
 import java.util.List;
 import java.util.UUID;
@@ -46,6 +51,12 @@ public class AccountResource {
     @POST
     @Consumes(MediaType.APPLICATION_JSON)
     @RolesAllowed(AccountAccessPolicy.ADMIN)
+    @APIResponses({
+            @APIResponse(responseCode = "201", description = "Cuenta abierta", content = @Content(schema = @Schema(implementation = AccountResponse.class))),
+            @APIResponse(responseCode = "400", description = "Datos inválidos", content = @Content(mediaType = Problems.MEDIA_TYPE, schema = @Schema(ref = "ProblemDetail"))),
+            @APIResponse(responseCode = "422", description = "Cliente no habilitado para abrir cuentas", content = @Content(mediaType = Problems.MEDIA_TYPE, schema = @Schema(ref = "ProblemDetail"))),
+            @APIResponse(responseCode = "503", description = "customers-service o el core no responden", content = @Content(mediaType = Problems.MEDIA_TYPE, schema = @Schema(ref = "ProblemDetail")))
+    })
     public Response open(@Valid OpenAccountRequest request) {
         AccountResponse body = AccountResponse.from(
                 accountService.open(request.customerId(), request.type(), request.currency()));
@@ -56,6 +67,10 @@ public class AccountResource {
     @GET
     @Path("/me")
     @RolesAllowed(AccountAccessPolicy.CUSTOMER)
+    @APIResponses({
+            @APIResponse(responseCode = "200", description = "Las cuentas del cliente del token", content = @Content(schema = @Schema(implementation = AccountResponse[].class))),
+            @APIResponse(responseCode = "503", description = "customers-service o el core no responden", content = @Content(mediaType = Problems.MEDIA_TYPE, schema = @Schema(ref = "ProblemDetail")))
+    })
     public List<AccountResponse> findMine() {
         return accountService.myAccounts().stream().map(AccountResponse::from).toList();
     }
@@ -64,6 +79,11 @@ public class AccountResource {
     @GET
     @Path("/{id}")
     @RolesAllowed({AccountAccessPolicy.ADMIN, AccountAccessPolicy.CUSTOMER})
+    @APIResponses({
+            @APIResponse(responseCode = "200", description = "La cuenta", content = @Content(schema = @Schema(implementation = AccountResponse.class))),
+            @APIResponse(responseCode = "404", description = "No existe o no es suya", content = @Content(mediaType = Problems.MEDIA_TYPE, schema = @Schema(ref = "ProblemDetail"))),
+            @APIResponse(responseCode = "503", description = "customers-service o el core no responden", content = @Content(mediaType = Problems.MEDIA_TYPE, schema = @Schema(ref = "ProblemDetail")))
+    })
     public AccountResponse findById(@PathParam("id") String id) {
         return AccountResponse.from(accountService.findById(uuid(id, "id")));
     }
@@ -71,6 +91,10 @@ public class AccountResource {
     // Cuentas de un cliente (solo asesor), sin llamar a customers-service
     @GET
     @RolesAllowed(AccountAccessPolicy.ADMIN)
+    @APIResponses({
+            @APIResponse(responseCode = "200", description = "Las cuentas del cliente", content = @Content(schema = @Schema(implementation = AccountResponse[].class))),
+            @APIResponse(responseCode = "400", description = "Falta customerId o no es un id", content = @Content(mediaType = Problems.MEDIA_TYPE, schema = @Schema(ref = "ProblemDetail")))
+    })
     public List<AccountResponse> findByCustomer(@QueryParam("customerId") String customerId) {
         if (customerId == null) {
             throw new BadParameterException("customerId");
@@ -87,6 +111,13 @@ public class AccountResource {
     @Path("/{id}/deposits")
     @Consumes(MediaType.APPLICATION_JSON)
     @RolesAllowed(AccountAccessPolicy.ADMIN)
+    @APIResponses({
+            @APIResponse(responseCode = "201", description = "Depósito registrado", content = @Content(schema = @Schema(implementation = MovementResponse.class))),
+            @APIResponse(responseCode = "400", description = "Datos inválidos", content = @Content(mediaType = Problems.MEDIA_TYPE, schema = @Schema(ref = "ProblemDetail"))),
+            @APIResponse(responseCode = "404", description = "No existe o no es suya", content = @Content(mediaType = Problems.MEDIA_TYPE, schema = @Schema(ref = "ProblemDetail"))),
+            @APIResponse(responseCode = "409", description = "Idempotency-Key usada con otro cuerpo", content = @Content(mediaType = Problems.MEDIA_TYPE, schema = @Schema(ref = "ProblemDetail"))),
+            @APIResponse(responseCode = "422", description = "Cuenta no activa", content = @Content(mediaType = Problems.MEDIA_TYPE, schema = @Schema(ref = "ProblemDetail")))
+    })
     public Response deposit(@PathParam("id") String id,
                             @HeaderParam(IdempotencyHeaders.IDEMPOTENCY_KEY) String idempotencyKey,
                             @Valid DepositRequest request) {
@@ -105,6 +136,12 @@ public class AccountResource {
     @GET
     @Path("/{id}/movements")
     @RolesAllowed({AccountAccessPolicy.ADMIN, AccountAccessPolicy.CUSTOMER})
+    @APIResponses({
+            @APIResponse(responseCode = "200", description = "Una página del estado de cuenta", content = @Content(schema = @Schema(implementation = MovementPageResponse.class))),
+            @APIResponse(responseCode = "400", description = "Página o tamaño inválidos", content = @Content(mediaType = Problems.MEDIA_TYPE, schema = @Schema(ref = "ProblemDetail"))),
+            @APIResponse(responseCode = "404", description = "No existe o no es suya", content = @Content(mediaType = Problems.MEDIA_TYPE, schema = @Schema(ref = "ProblemDetail"))),
+            @APIResponse(responseCode = "503", description = "customers-service o el core no responden", content = @Content(mediaType = Problems.MEDIA_TYPE, schema = @Schema(ref = "ProblemDetail")))
+    })
     public MovementPageResponse movements(@PathParam("id") String id,
                                           @QueryParam("page") @DefaultValue("0") String page,
                                           @QueryParam("size") @DefaultValue("20") String size) {
