@@ -56,7 +56,7 @@ jobs:
           distribution: temurin
           java-version: '21'
 
-      - uses: gradle/actions/setup-gradle@3f5f9adaf7d9fecd50b5935e54106014257a94e6 # v6.4.0
+      - uses: gradle/actions/setup-gradle@8da46b539cd8fe6ab27ca75128919a18d757604c # v6.4.1
 
       # Compila el binario dentro del builder (container-build: el runner no necesita GraalVM) y corre contra él las
       # pruebas de src/native-test, con PostgreSQL y Kafka de Testcontainers como en las pruebas de JVM
