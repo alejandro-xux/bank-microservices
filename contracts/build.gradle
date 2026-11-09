@@ -3,7 +3,7 @@
 // implementation 'com.alejandro.bank:contracts', así los dos lados compilan contra el mismo contrato
 plugins {
 	id 'java-library'
-	id 'com.google.protobuf' version '0.10.0'
+	id 'com.google.protobuf' version '0.10.1'
 }
 
 // JaCoCo y lo que necesita Sonar, igual en todos los módulos (BANK-84)
