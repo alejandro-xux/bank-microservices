@@ -5,7 +5,7 @@
 # fuente ni Gradle. Las bases van fijadas por digest (como las actions por SHA): la misma receta da la misma imagen
 
 # --- Construcción ---------------------------------------------------------------------------------------
-FROM eclipse-temurin:21-jdk-noble@sha256:107215954359f1ab0be058a247d7c64ed6e69c71c1682d471d38ef751ec8e964 AS build
+FROM eclipse-temurin:21-jdk-noble@sha256:114cabb73033ca4ce7ceec3deb62396bc1b716282bae051ed3c1d82e38fcab2d AS build
 WORKDIR /src
 # Lo que compila el servicio: su carpeta y los includeBuild (platform-bom, contracts) más gradle/quality.gradle
 COPY gradle gradle
@@ -21,7 +21,7 @@ WORKDIR /
 RUN java -Djarmode=tools -jar /app.jar extract --layers --destination /extracted
 
 # --- Ejecución ------------------------------------------------------------------------------------------
-FROM eclipse-temurin:21-jre-noble@sha256:35501d3f93173b420ac9001658eb68157e813316b865087e345c187fca422c4c
+FROM eclipse-temurin:21-jre-noble@sha256:0eda5830ed7b669abc246a8dc520ea8a23cab06f9a8d4b6964109e2f2394e46f
 # Usuario sin privilegios con un UID fijo (el mismo en todas las imágenes; en AKS, runAsNonRoot)
 RUN groupadd --system --gid 10001 bank && useradd --system --uid 10001 --gid bank --no-create-home bank
 WORKDIR /app
